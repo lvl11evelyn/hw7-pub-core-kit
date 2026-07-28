@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.0.2
+// @version      1.0.3
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -11,6 +11,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_info
+// @updateURL    https://raw.githubusercontent.com/lvl11evelyn/hw7-pub-core-kit/main/HW7%20Public%20Core%20Kit.user.js
+// @downloadURL  https://raw.githubusercontent.com/lvl11evelyn/hw7-pub-core-kit/main/HW7%20Public%20Core%20Kit.user.js
 // ==/UserScript==
 
 /* ===== HW Combat Roll Ranges 0.0.1 ===== */
@@ -1519,11 +1521,6 @@ function hw7RunDocumentEndModules() {
     }
 
   })();
-
-  //CHANGELOG
-  //v2.2.0: Removed Pikies mode and added CRR bridge publication for direct Jungle berry yields and imported Jungle rows.
-  //v2.1.1: Added function injectJgLayoutStyle() {...} for cosmetic improvements including a externally hosted backdrop rendering
-  //v2.2.2: Refined geometry, assigned a new module nomenclature to afford it acronym readiness.
 
   /* ===== HW Mines Telemetry Tracker.user.js ===== */
   (function () {
@@ -6382,64 +6379,7 @@ function hw7RunDocumentEndModules() {
           document.head.appendChild(style);
       }
   })();
-  //  MAINTENANCE INDEX
-  /*
-    injectMttLayoutStyle
-      Injects the MTT-only layout rule that shifts div.content-area leftward on Mines pages.
-
-    render
-      Main fixed-panel renderer. Calls injectMttLayoutStyle() before panel creation.
-
-    renderTradingPostBalance
-      Injects the inline Trading Post balance banner.
-
-    renderPreviewBlock
-      Renders sticky stock / trade-preview footer.
-
-    publishTopbarLastTrade
-      Bridges completed trade deltas to the topbar TBS script.
-
-    installMttTradeTooltip
-      Creates custom Tooltip element when called.
-
-    buildOreHexIcon
-      SVG block that constructs the Ore icon's shape for the cards.
-
-    buildMttTradeShardSection
-      Creates the datasets as declared to populate the cards' information fields.
-
-    bindMttHobaltCollapse
-      Applies and persists the Hobalt section's independent expanded/collapsed state.
-
-  */
-  // INDEX CHANGELOG
-  /* v2.0.1: Depot module pass 1 — added mttTradeCore six-card renderer for Gr/Wh/Ye + Or/Re/Pu.
-  // v2.0.2: Depot parser fix — added native Trading Post table fallback for preview/card rows.
-  // v2.0.3: Depot module pass 2 — hide native core stat-trade rows after mttTradeCore renders.
-  // v2.0.4: Depot module pass 2 — finalized mttTradeBl right-side layout and hid native core/Black rows.
-  // v2.0.5: Depot module pass 3 — added landscape mttTradeSh Hobalt action cards and moved trade meta above Black.
-  // v2.0.6: Depot native elements revised for cosmetic continuity.
-  // v2.0.8: Reconciled native cosmetic revisions, corrected Hobalt href routing, and kept Piggy-only active tooltip behavior.
-  // v2.0.9: Corrected COLORS assignments for renderBalanceSourceLine which used COLORS.str for spd and vice versa. Removed Trades Qty append from daily header lines. Sorted Shard trade cards according to ascending &Trade= location href value. Redesigned stockPill style.
-  // v2.1.1: Introduce custom tooltip support for TradeCards, used to convey actionable trade projections that are too dense for the card face.
-  // v2.1.2: Added CRR bridge use for mine-trade publication and TradeCard custom tooltips with single-trade, current-10-run, stock, and roll-ceiling projections.
-  // v2.1.3: Replaced direct hover tooltip with disclosure-based persistent info panels; roll-ceiling run line now states exact run trade count.
-  // v2.1.4: Ore-themed persistent info panels; panel outline and heading color/border follow the explained ore.
-  // v2.1.5: Fixed ore heading width/margin behavior so the floated close button no longer displaces centered heading text.
-  // v2.1.6: Incorporated 2-factor assisted reconciliation for missing TRADES results rows
-  // v2.1.7: Assigned const `SOURCE_COLORS = {...}` to give source lines a lower alpha.
-  // v2.1.8: Geometry & palette are aesthetically congruent. Set to begin collapsible container infrastructure.
-  // v2.2.1: Added the first collapsible-container pass for Hobalt, with persistent state and directional disclosure arrows.
-  // v2.2.1: Black Ore disclosure opens right of the initial cursor position within content-area bounds; its full tooltip opens left of the card.
-  // v2.2.2: Revised Black Ore TooolTip panel to appear right of the Card. Revised the Black  Ore Card's More Info disclosure geometry to render inside of the .content-area, below the cursor, and prefer to be as far-right of the cursor as canbe acheived within these parameters.
-  // v2.2.3: Increased Max Rows value to 4500 allowing for a full month of 140 trades every day to be recorded. Will observe the performance impact to determine if monthly or weekly exporting would be best for archival standard.
-  // v2.2.4: Added inclusion for all Swim-Time stat influx via a zero-gains-omission rule set allowing for Str and Pow gains to be sources appropriately also.
-  // v2.2.5: Reduced the lengths of values in the rendered table to slim its width from 540px -> 400px.
-  // v2.2.6: Further reduced the lengths of most of the Panel's row values, increased the font size and retained 400px PANEL_WIDTH. Added a cosmetic button element for trade days collapse/expand behavior, clicking anywhere on the row performs the function but the button holds the title and semantic space.
-  // v2.2.7: Added event listening to allow key presses to execute specific, natively available command urls.
-  // v2.2.8: Added a Collapse/Expand All button to the buttons' flex element, assigned it an ID selector, positioned and styled the buttons container to remain in-place regardless of rendered row density.
-  */
-
+ 
   /* ===== HW Topbar Total Battle Stats.user.js ===== */
   (function () {
     'use strict';
@@ -7226,12 +7166,6 @@ function hw7RunDocumentEndModules() {
       return String(s || '').replace(/\s+/g, ' ').trim();
     }
   })();
-  // v0.0.4: Added baseline Speed/Damage/Defense roll-range topbar column with average-roll row tooltips.
-  // v0.1.1: Refined panel's geometry to be more instantly parsible as a metric for actionable information should be.
-  // v0.1.2: Moved combat roll-range formula handling to HW Combat Roll Ranges and added CRR stat/Jungle-yield bridge support.
-  // v1.0.2: Reduced clutter, replaced source data into the hover popup, increased legibility and continuity between the two panels. Renamed metadata to align with the acronym.
-  // v1.0.3: Added the baseline stat composition breakdown to the rendered panel.
-  // v1.0.4: Replaced unreliable native title popups with a module-controlled tooltip for consistent panel hover details.
 }
 
 if (document.readyState === 'loading') {
