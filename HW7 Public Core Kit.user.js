@@ -1563,7 +1563,7 @@ function hw7RunDocumentEndModules() {
       const K_TOPBAR_LAST_TRADE = `mtt_topbar_last_trade_bridge_v1`;
 
       const MAX_ROWS = 4500;
-      const PANEL_WIDTH = 405;
+      const PANEL_WIDTH = 410;
 
       const ORE_IDS = {
           228: 'Ch',
