@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.0.3
+// @version      1.0.4
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -4390,9 +4390,9 @@ function hw7RunDocumentEndModules() {
           collapseBtn.style.cursor = 'pointer';
           collapseBtn.style.borderRadius = '3px';
           collapseBtn.style.fontSize = '8px';
-          collapseBtn.style.padding = '1px';
+          collapseBtn.style.padding = '0 1px 1px';
           collapseBtn.style.marginLeft = '15px';
-          collapseBtn.style.lineHeight = '9px';
+          collapseBtn.style.lineHeight = '1';
           collapseBtn.style.fontFamily = 'Consolas, monospace';
           collapseBtn.style.backgroundColor = collapsed ? '#dfd' : '#fdd';
           collapseBtn.title = collapsed ? 'Click to expand.' : 'Click to collapse.';
@@ -4678,9 +4678,12 @@ function hw7RunDocumentEndModules() {
           wrap.style.cssText = [
               'position:sticky',
               'bottom:146px',
-              'top:calc(100% - 170px)',
+              'top:calc(100% - 171px)',
               'background-color:#111111',
               'border-top:2px solid #111111',
+              'display:flex',
+              'justify-content:space-between',
+              'gap:6px'
               ].join(';');
           wrap.style.whiteSpace = 'normal';
 
@@ -4696,27 +4699,31 @@ function hw7RunDocumentEndModules() {
                   isTradeDayCollapsed(day.dayKey, s.dayKey, collapsedMap)
               );
 
+          const leftBtns = document.createElement('div');
+              leftBtns.style.display = 'flex';
+              leftBtns.style.flex = '1 1 auto';
+
           const exportBtn = document.createElement('button');
           exportBtn.textContent = 'EXPORT';
-          exportBtn.style.margin = '3px 2% 0 4%';
-          exportBtn.style.width = '15%';
+          exportBtn.style.margin = '3px 2% 0';
+          exportBtn.style.padding = '1px 2px';
           exportBtn.addEventListener('click', () => {
               exportMines(s, rows);
           });
 
           const importBtn = document.createElement('button');
           importBtn.textContent = 'IMPORT';
-          importBtn.style.margin = '3px 2% 0';
-          importBtn.style.width = '15%';
+          importBtn.style.margin = '3px 2% 0 0';
+          importBtn.style.padding = '1px 2px';
           importBtn.addEventListener('click', () => {
               openImportBox(s, rows);
           });
 
           const swimBtn = document.createElement('button');
-          swimBtn.textContent = 'SWIM ⇢▤';
+          swimBtn.textContent = 'SWIM⇢▤';
           swimBtn.title = 'Import a Jungle export for the Trading Post.';
-          swimBtn.style.margin = '3px 2% 0';
-          swimBtn.style.width = '19%';
+          swimBtn.style.margin = '3px 2% 0 0';
+          swimBtn.style.padding = '0 2px';
           swimBtn.addEventListener('click', () => {
               openSwimImportBox(s, rows);
           });
@@ -4725,9 +4732,9 @@ function hw7RunDocumentEndModules() {
           clearBtn.textContent = 'CLEAR';
           clearBtn.style.color = '#e80000';
           clearBtn.style.fontWeight = 'bold';
-          clearBtn.style.margin = '3px 2% 0';
+          clearBtn.style.margin = '3px 2% 0 6%';
+          clearBtn.style.padding = '1px 2px';
           clearBtn.style.cursor = 'not-allowed';
-          clearBtn.style.width = '12%';
           clearBtn.addEventListener('click', () => {
               if (!confirm('Clear the trade ledger?')) return;
 
@@ -4767,8 +4774,7 @@ function hw7RunDocumentEndModules() {
           collapseAllBtn.title = allCollapsed
               ? 'Expand all trade days.'
               : 'Collapse all trade days.';
-          collapseAllBtn.style.margin = '3px 0 0 4%';
-          collapseAllBtn.style.width = '11%';
+          collapseAllBtn.style.margin = '3px 2% 0 auto';
           collapseAllBtn.style.padding = '1px';
           collapseAllBtn.style.fontSize = '9px';
           collapseAllBtn.style.lineHeight = '15px';
@@ -4792,10 +4798,12 @@ function hw7RunDocumentEndModules() {
               render(s, rows, state);
           });
 
-          wrap.appendChild(exportBtn);
-          wrap.appendChild(importBtn);
-          wrap.appendChild(swimBtn);
-          wrap.appendChild(clearBtn);
+          leftBtns.appendChild(exportBtn);
+          leftBtns.appendChild(importBtn);
+          leftBtns.appendChild(swimBtn);
+          leftBtns.appendChild(clearBtn);
+
+          wrap.appendChild(leftBtns);
           wrap.appendChild(collapseAllBtn);
 
           return wrap;
