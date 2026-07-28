@@ -812,8 +812,8 @@ function hw7RunDocumentEndModules() {
           style.textContent = `
               .content-wrap > div.content-area {
                   margin: 0 auto 0 15px;
-                  min-width: 745px !important;
-                  max-width: 745px !important;
+                  min-width: 700px !important;
+                  max-width: 700px !important;
                   }`;
           document.head.appendChild(style);
       }
@@ -855,7 +855,7 @@ function hw7RunDocumentEndModules() {
       const box = document.createElement('div');
       box.id = 'jbgl-box';
       box.style.position = 'fixed';
-      box.style.left = '990px';
+      box.style.left = '955px';
       box.style.top = '105px';
       box.style.bottom = '100px';
       box.style.width = `${PANEL_WIDTH}px`;
@@ -898,7 +898,7 @@ function hw7RunDocumentEndModules() {
       const footer = document.createElement('div');
       footer.id = 'jbgl-footer';
       footer.style.position = 'fixed';
-      footer.style.left = '990px';
+      footer.style.left = '955px';
       footer.style.bottom = '60px';
       footer.style.width = `${PANEL_WIDTH}px`;
       footer.style.zIndex = '99999';
@@ -929,7 +929,7 @@ function hw7RunDocumentEndModules() {
       const controls = document.createElement('div');
       controls.id = 'jbgl-controls';
       controls.style.position = 'fixed';
-      controls.style.left = '1070px';
+      controls.style.left = '1025px';
       controls.style.bottom = '15px';
       controls.style.width = `calc(${PANEL_WIDTH}px - 80px)`;
       controls.style.display = 'grid';
@@ -982,7 +982,7 @@ function hw7RunDocumentEndModules() {
       importToggle.title = jungleImportOpen ? 'Hide import' : 'Show import';
       importToggle.textContent = jungleImportOpen ? '▼' : '▲';
       importToggle.style.position = 'fixed';
-      importToggle.style.left = `1010px`;
+      importToggle.style.left = `965px`;
       importToggle.style.bottom = '18px';
       importToggle.style.width = '20px';
       importToggle.style.height = '20px';
