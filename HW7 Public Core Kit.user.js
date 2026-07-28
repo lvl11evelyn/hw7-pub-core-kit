@@ -419,7 +419,7 @@ function hw7RunDocumentEndModules() {
 
 
     const MAX_ROWS = 5000;
-    const PANEL_WIDTH = 345;
+    const PANEL_WIDTH = 355;
     let jungleImportOpen = false;
 
     const href = String(location.href || '');
@@ -812,8 +812,8 @@ function hw7RunDocumentEndModules() {
           style.textContent = `
               .content-wrap > div.content-area {
                   margin: 0 auto 0 15px;
-                  min-width: 845px !important;
-                  max-width: 845px !important;
+                  min-width: 745px !important;
+                  max-width: 745px !important;
                   }`;
           document.head.appendChild(style);
       }
@@ -855,7 +855,7 @@ function hw7RunDocumentEndModules() {
       const box = document.createElement('div');
       box.id = 'jbgl-box';
       box.style.position = 'fixed';
-      box.style.left = '1090px';
+      box.style.left = '990px';
       box.style.top = '105px';
       box.style.bottom = '100px';
       box.style.width = `${PANEL_WIDTH}px`;
@@ -898,7 +898,7 @@ function hw7RunDocumentEndModules() {
       const footer = document.createElement('div');
       footer.id = 'jbgl-footer';
       footer.style.position = 'fixed';
-      footer.style.left = '1090px';
+      footer.style.left = '990px';
       footer.style.bottom = '60px';
       footer.style.width = `${PANEL_WIDTH}px`;
       footer.style.zIndex = '99999';
@@ -910,15 +910,15 @@ function hw7RunDocumentEndModules() {
       footer.style.borderBottom = '1px solid #2f2f2f';
       footer.style.outline = '2px outset #0bf';
       footer.style.borderRadius = '3px';
-      footer.style.padding = '8px 3px 4px';
-      footer.style.fontFamily = 'Amarante, monospace';
+      footer.style.height = '30px';
+      footer.style.fontFamily = 'Consolas, monospace';
       footer.style.fontSize = '10.8px';
-      footer.style.lineHeight = '1.5';
+      footer.style.lineHeight = '30px';
       footer.style.color = '#d8d8d8';
       if (jungleImportOpen) {
         footer.appendChild(makeJungleImportButton(rows, state));
       } else {
-        footer.appendChild(makeFooterTotalsRow('- - - TOTAL - -', makeTotalTotals(rows, state)));
+        footer.appendChild(makeFooterTotalsRow('- - TOTAL - - ', makeTotalTotals(rows, state)));
       }
 
       box.appendChild(headerWrap);
@@ -929,7 +929,7 @@ function hw7RunDocumentEndModules() {
       const controls = document.createElement('div');
       controls.id = 'jbgl-controls';
       controls.style.position = 'fixed';
-      controls.style.left = '1160px';
+      controls.style.left = '1070px';
       controls.style.bottom = '15px';
       controls.style.width = `calc(${PANEL_WIDTH}px - 80px)`;
       controls.style.display = 'grid';
@@ -982,10 +982,11 @@ function hw7RunDocumentEndModules() {
       importToggle.title = jungleImportOpen ? 'Hide import' : 'Show import';
       importToggle.textContent = jungleImportOpen ? '▼' : '▲';
       importToggle.style.position = 'fixed';
-      importToggle.style.left = `1110px`;
-      importToggle.style.bottom = '20px';
-      importToggle.style.width = '24px';
-      importToggle.style.height = '24px';
+      importToggle.style.left = `1010px`;
+      importToggle.style.bottom = '18px';
+      importToggle.style.width = '20px';
+      importToggle.style.height = '20px';
+      importToggle.style.padding = '4px 0 6px';
       importToggle.style.zIndex = '100000';
       importToggle.style.display = 'inline-flex';
       importToggle.style.alignItems = 'center';
@@ -996,7 +997,7 @@ function hw7RunDocumentEndModules() {
       importToggle.style.outline = '2px inset #8bfb';
       importToggle.style.color = '#f4f4f4';
       importToggle.style.fontFamily = 'Consolas, monospace';
-      importToggle.style.fontSize = '15px';
+      importToggle.style.fontSize = '24px';
       importToggle.style.fontWeight = 'bold';
       importToggle.style.lineHeight = '1';
       importToggle.style.textDecoration = 'none';
@@ -1025,7 +1026,7 @@ function hw7RunDocumentEndModules() {
       btn.style.display = 'inline-flex';
       btn.style.alignItems = 'center';
       btn.style.justifyContent = 'center';
-      btn.style.width = '210px';
+      btn.style.width = '90%';
       btn.style.height = '24px';
       btn.style.whiteSpace = 'nowrap';
       btn.style.fontSize = '14px';
@@ -1562,7 +1563,7 @@ function hw7RunDocumentEndModules() {
       const K_TOPBAR_LAST_TRADE = `mtt_topbar_last_trade_bridge_v1`;
 
       const MAX_ROWS = 4500;
-      const PANEL_WIDTH = 400;
+      const PANEL_WIDTH = 405;
 
       const ORE_IDS = {
           228: 'Ch',
@@ -3880,7 +3881,9 @@ function hw7RunDocumentEndModules() {
           const style = document.createElement('style');
           style.id = 'mtt-layout-style';
           style.textContent = `body.top-menu-on div.container div.content-wrap div.content-area {
-          margin: 0 auto 0 15px;}`;
+          margin: 0 auto 0 15px;
+          min-width: 745px !important;
+          max-width: 745px !important;}`;
           document.head.appendChild(style);
       }
 
@@ -4028,7 +4031,7 @@ function hw7RunDocumentEndModules() {
               panel.style.cssText = [
                   'position:fixed',
                   'top:106px',
-                  'left:1090px',
+                  'left:975px',
                   'bottom:16px',
                   `width:${PANEL_WIDTH}px`,
                   'height:auto',
@@ -4045,7 +4048,8 @@ function hw7RunDocumentEndModules() {
                   'margin:0',
                   'white-space:pre',
                   'overflow:auto',
-                  'z-index:99998'
+                  'z-index:99998',
+                  'scrollbar-width:thin!important'
               ].join(';');
 
               const legend = document.createElement('legend');
@@ -6937,32 +6941,39 @@ function hw7RunDocumentEndModules() {
       const style = document.createElement('style');
       style.id = 'hwtbs-topbar-style';
       style.textContent = `
+  .topbar .top-center {
+	width: 705px;
+	display: inline-block;
+    }
+  .topbar .top-left {
+	min-width: 64px;
+    }
   #hwtbs-topbar-panel,
   #hwtbs-roll-panel {
   	min-width: 185px;
-  	padding: 0 0 0 4px;
-  	border-left: 1.5px solid #181818;
-      border-right: 1px solid #181818;
-      border-bottom: 2px solid #181818;
+  	border-left: 2px solid #181818;
+    border-right: 2px solid #181818;
   	background: rgba(125,85,255,1);
   	color: #111;
   	font-family: Consolas, "Courier New", monospace;
-  	font-size: 14px;
+  	font-size: 13px;
   	line-height: 22px;
   	white-space: nowrap;
   	display: block;
   	width: 10%;
-  	max-width: 225px;
+  	max-width: 200px;
   	position: fixed;
-  	left: 1120px;
+  	left: 840px;
   	top: 0;
   	max-height: 67px;
-      overflow: clip;
+    overflow: clip;
+    text-overflow: ellipsis;
   }
   #hwtbs-roll-panel {
-    left: 1360px;
+    left: 1035px;
     overflow: clip;
     width: fit-content;
+    min-width: unset;
   }
   #hwtbs-topbar-panel .hwtbs-total {
     font-weight: bold;
@@ -7018,7 +7029,7 @@ function hw7RunDocumentEndModules() {
     border-bottom: 1px solid #0003;
     border-right-width: 1px;
     border-left-width: 2px;
-    font-size: 14px;
+    font-size: 12px;
     min-width: fit-content;
   }
   #hwtbs-roll-panel .hwtbs-roll-speed {
