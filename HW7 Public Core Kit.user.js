@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.0.4
+// @version      1.0.5
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -3880,7 +3880,7 @@ function hw7RunDocumentEndModules() {
 
           const style = document.createElement('style');
           style.id = 'mtt-layout-style';
-          style.textContent = `body.top-menu-on div.container div.content-wrap div.content-area {
+          style.textContent = `body div.content-wrap div.content-area {
           margin: 0 auto 0 15px;
           min-width: 745px !important;
           max-width: 745px !important;}`;
