@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.1.2
+// @version      1.1.3
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -7136,7 +7136,6 @@ function hw7RunDocumentEndModules() {
     }
   #hwtbs-topbar-panel,
   #hwtbs-roll-panel {
-  	min-width: 185px;
   	border-left: 2px solid #181818;
     border-right: 2px solid #181818;
   	background: rgba(125,85,255,1);
@@ -7146,17 +7145,18 @@ function hw7RunDocumentEndModules() {
   	line-height: 22px;
   	white-space: nowrap;
   	display: block;
-  	width: 10%;
+  	width: 200px;
+  	min-width: 200px;
   	max-width: 200px;
   	position: fixed;
-  	left: 840px;
+  	left: 870px;
   	top: 0;
   	max-height: 67px;
     overflow: clip;
     text-overflow: ellipsis;
   }
   #hwtbs-roll-panel {
-    left: 1035px;
+    left: 1080px;
     overflow: clip;
     width: fit-content;
     min-width: unset;
