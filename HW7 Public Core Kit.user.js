@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.0.6
+// @version      1.0.7
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -1747,6 +1747,7 @@ function hw7RunDocumentEndModules() {
 
           injectDepotTradeCardStyle();
           installMttTradeTooltip();
+		  decorateHelperTradeCards(rows);
 
           const nativeHrefMap = getNativeTradeHrefMap();
 
@@ -5652,6 +5653,46 @@ function hw7RunDocumentEndModules() {
           return String(s || '').replace(/\s+/g, ' ').trim();
       }
 
+	  function decorateHelperTradeCards(rows) {
+			const rowMap = new Map(
+				(Array.isArray(rows) ? rows : [])
+					.filter(row => row && row.code)
+					.map(row => [String(row.code), row])
+			);
+		
+			const nameToCode = {
+				'Green Ore': 'Gr',
+				'White Ore': 'Wh',
+				'Yellow Ore': 'Ye',
+				'Orange Ore': 'Or',
+				'Red Ore': 'Re',
+				'Purple Ore': 'Pu',
+				'Black Ore': 'Bl'
+			};
+		
+			const cards = document.querySelectorAll(
+				'.content-area [data-ore-name]'
+			);
+		
+			for (const card of cards) {
+				const oreName = String(card.dataset.oreName || '').trim();
+				const code = nameToCode[oreName];
+		
+				if (!code) continue;
+		
+				const row = rowMap.get(code);
+				if (!row) continue;
+		
+				const active =
+					card.matches('a[href*="cmd=mines"][href*="do=trade"][href*="trade="]');
+		
+				card.dataset.ore = code;
+				card.dataset.kind = code === 'Bl' ? 'black' : 'core';
+				card.dataset.mttTip = buildMttTradeCardTip(row, active);
+		
+				card.removeAttribute('title');
+			}
+	  }
 
       function installMttTradeTooltip() {
           const disclosure = getMttTradeDisclosure();
