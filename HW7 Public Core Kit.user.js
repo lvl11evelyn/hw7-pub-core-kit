@@ -2827,6 +2827,7 @@ function hw7RunDocumentEndModules() {
 
     return null;
 }
+
       function makeEmptyStock() {
           return {
               Sh: 0,
