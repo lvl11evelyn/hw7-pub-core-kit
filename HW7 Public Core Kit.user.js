@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.1.1
+// @version      1.1.2
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -6418,9 +6418,11 @@ function hw7RunDocumentEndModules() {
                     height: 32px;
                   }
 
-                  #mtt-trade-sh .mtt-hobalt-chunk {
+                  #mtt-trade-sh .mtt-hobalt-chunk-img {
+                    display: block;
                     width: 38px;
                     height: 30px;
+                    object-fit: contain;
                   }
 
                   #mtt-trade-sh .mtt-begging-piggy {
