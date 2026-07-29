@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.0.5
+// @version      1.0.6
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2698,52 +2698,135 @@ function hw7RunDocumentEndModules() {
           return hits > 0 ? stock : null;
       }
 
-      function parseStockFromMineInteriorRow() {
-          const area = document.querySelector('.content-area');
-          if (!area) return null;
+ function parseStockFromMineInteriorRow() {
+    const area = document.querySelector('.content-area');
+    if (!area) return null;
 
-          const centers = Array.from(area.querySelectorAll('center'));
+    /*
+     * Hobo Helper layout:
+     *
+     * Each ore is wrapped in its own card:
+     *   <div>
+     *     <img title="Green Ore" alt="Green Ore">
+     *     <span>Green Ore</span>
+     *     <div>(21)</div>
+     *   </div>
+     *
+     * Identify the ore by its preserved title/alt attribute and read the
+     * dedicated count element from the same card.
+     */
+    const helperStock = makeEmptyStock();
+    const helperCodes = new Set();
 
-          for (const center of centers) {
-              const children = Array.from(center.childNodes || []);
-              const directImgs = children.filter(node => node && node.nodeType === 1 && String(node.tagName || '').toUpperCase() === 'IMG');
+    const oreImages = Array.from(
+        area.querySelectorAll('img[title], img[alt]')
+    );
 
-              if (directImgs.length !== MINE_STOCK_ORDER.length) continue;
+    for (const img of oreImages) {
+        const oreName = String(
+            img.getAttribute('title') ||
+            img.getAttribute('alt') ||
+            ''
+        ).trim();
 
-              const stock = makeEmptyStock();
-              let ok = true;
+        const code = ORE_NAMES[oreName];
+        if (!code || helperCodes.has(code)) continue;
 
-              for (let i = 0; i < directImgs.length; i++) {
-                  const img = directImgs[i];
-                  let countText = '';
-                  let node = img.nextSibling;
+        const card = img.parentElement;
+        if (!card) continue;
 
-                  while (node && !(node.nodeType === 1 && String(node.tagName || '').toUpperCase() === 'IMG')) {
-                      countText += node.textContent || '';
-                      node = node.nextSibling;
-                  }
+        const countElement = Array.from(card.children).find(element => {
+            if (element === img) return false;
 
-                  const m = countText.match(/\(\s*(\d*)\s*\)/);
-                  if (!m) {
-                      ok = false;
-                      break;
-                  }
+            return /^\(\s*[\d,]*\s*\)$/.test(
+                String(element.textContent || '').trim()
+            );
+        });
 
-                  const n = m[1] === '' ? 0 : parseInt(m[1], 10);
-                  if (!Number.isFinite(n) || n < 0) {
-                      ok = false;
-                      break;
-                  }
+        if (!countElement) continue;
 
-                  stock[MINE_STOCK_ORDER[i]] = n;
-              }
+        const countMatch = String(countElement.textContent || '')
+            .trim()
+            .match(/^\(\s*([\d,]*)\s*\)$/);
 
-              if (ok) return stock;
-          }
+        if (!countMatch) continue;
 
-          return null;
-      }
+        const count = countMatch[1] === ''
+            ? 0
+            : parseInt(countMatch[1].replace(/,/g, ''), 10);
 
+        if (!Number.isFinite(count) || count < 0) continue;
+
+        helperStock[code] = count;
+        helperCodes.add(code);
+    }
+
+    if (helperCodes.size === MINE_STOCK_ORDER.length) {
+        return helperStock;
+    }
+
+    /*
+     * Native Mines layout fallback:
+     *
+     * The original page places nine direct IMG nodes inside a CENTER,
+     * followed by text containing each count.
+     */
+    const centers = Array.from(area.querySelectorAll('center'));
+
+    for (const center of centers) {
+        const children = Array.from(center.childNodes || []);
+
+        const directImgs = children.filter(node =>
+            node &&
+            node.nodeType === Node.ELEMENT_NODE &&
+            String(node.tagName || '').toUpperCase() === 'IMG'
+        );
+
+        if (directImgs.length !== MINE_STOCK_ORDER.length) continue;
+
+        const nativeStock = makeEmptyStock();
+        let valid = true;
+
+        for (let i = 0; i < directImgs.length; i++) {
+            const img = directImgs[i];
+            let countText = '';
+            let node = img.nextSibling;
+
+            while (
+                node &&
+                !(
+                    node.nodeType === Node.ELEMENT_NODE &&
+                    String(node.tagName || '').toUpperCase() === 'IMG'
+                )
+            ) {
+                countText += node.textContent || '';
+                node = node.nextSibling;
+            }
+
+            const countMatch = countText.match(/\(\s*([\d,]*)\s*\)/);
+
+            if (!countMatch) {
+                valid = false;
+                break;
+            }
+
+            const count = countMatch[1] === ''
+                ? 0
+                : parseInt(countMatch[1].replace(/,/g, ''), 10);
+
+            if (!Number.isFinite(count) || count < 0) {
+                valid = false;
+                break;
+            }
+
+            nativeStock[MINE_STOCK_ORDER[i]] = count;
+        }
+
+        if (valid) return nativeStock;
+    }
+
+    return null;
+}
       function makeEmptyStock() {
           return {
               Sh: 0,
