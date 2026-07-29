@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.0.7
+// @version      1.1.1
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -1733,7 +1733,12 @@ function hw7RunDocumentEndModules() {
           const content = document.querySelector('.content-area');
           if (!content) return;
 
-          if (document.getElementById('mtt-depot-trade')) return;
+          if (
+              document.getElementById('mtt-depot-trade') ||
+              document.getElementById('mtt-trade-sh')
+          ) {
+              return;
+          }
 
           const rows = Array.isArray(s && s.tradePost && s.tradePost.rows)
           ? s.tradePost.rows
@@ -1747,9 +1752,17 @@ function hw7RunDocumentEndModules() {
 
           injectDepotTradeCardStyle();
           installMttTradeTooltip();
-		  decorateHelperTradeCards(rows);
 
           const nativeHrefMap = getNativeTradeHrefMap();
+          const helperTradeContainer = findHelperTradeCardsContainer(content);
+
+          if (helperTradeContainer) {
+              decorateHelperTradeCards(rows);
+
+              const hobaltSection = buildMttTradeShardSection(s, nativeHrefMap);
+              helperTradeContainer.insertAdjacentElement('afterend', hobaltSection);
+              return;
+          }
 
           const mttDepotTrade = document.createElement('div');
           mttDepotTrade.id = 'mtt-depot-trade';
@@ -5653,46 +5666,84 @@ function hw7RunDocumentEndModules() {
           return String(s || '').replace(/\s+/g, ' ').trim();
       }
 
-	  function decorateHelperTradeCards(rows) {
-			const rowMap = new Map(
-				(Array.isArray(rows) ? rows : [])
-					.filter(row => row && row.code)
-					.map(row => [String(row.code), row])
-			);
-		
-			const nameToCode = {
-				'Green Ore': 'Gr',
-				'White Ore': 'Wh',
-				'Yellow Ore': 'Ye',
-				'Orange Ore': 'Or',
-				'Red Ore': 'Re',
-				'Purple Ore': 'Pu',
-				'Black Ore': 'Bl'
-			};
-		
-			const cards = document.querySelectorAll(
-				'.content-area [data-ore-name]'
-			);
-		
-			for (const card of cards) {
-				const oreName = String(card.dataset.oreName || '').trim();
-				const code = nameToCode[oreName];
-		
-				if (!code) continue;
-		
-				const row = rowMap.get(code);
-				if (!row) continue;
-		
-				const active =
-					card.matches('a[href*="cmd=mines"][href*="do=trade"][href*="trade="]');
-		
-				card.dataset.ore = code;
-				card.dataset.kind = code === 'Bl' ? 'black' : 'core';
-				card.dataset.mttTip = buildMttTradeCardTip(row, active);
-		
-				card.removeAttribute('title');
-			}
-	  }
+      function findHelperTradeCardsContainer(content) {
+          if (!content) return null;
+
+          const requiredOres = new Set([
+              'Green Ore',
+              'White Ore',
+              'Yellow Ore',
+              'Orange Ore',
+              'Red Ore',
+              'Purple Ore',
+              'Black Ore'
+          ]);
+
+          for (const child of Array.from(content.children)) {
+              if (!(child instanceof HTMLElement)) continue;
+              if (child.id === 'mtt-depot-trade') continue;
+
+              const cards = Array.from(
+                  child.querySelectorAll('[data-ore-name]')
+              );
+
+              if (!cards.length) continue;
+
+              const foundOres = new Set(
+                  cards
+                      .map(card => String(card.dataset.oreName || '').trim())
+                      .filter(Boolean)
+              );
+
+              const hasAllTradeOres = Array.from(requiredOres)
+                  .every(name => foundOres.has(name));
+
+              if (hasAllTradeOres) return child;
+          }
+
+          return null;
+      }
+
+      function decorateHelperTradeCards(rows) {
+          const rowMap = new Map(
+              (Array.isArray(rows) ? rows : [])
+                  .filter(row => row && row.code)
+                  .map(row => [String(row.code), row])
+          );
+
+          const nameToCode = {
+              'Green Ore': 'Gr',
+              'White Ore': 'Wh',
+              'Yellow Ore': 'Ye',
+              'Orange Ore': 'Or',
+              'Red Ore': 'Re',
+              'Purple Ore': 'Pu',
+              'Black Ore': 'Bl'
+          };
+
+          const cards = document.querySelectorAll(
+              '.content-area [data-ore-name]'
+          );
+
+          for (const card of cards) {
+              const oreName = String(card.dataset.oreName || '').trim();
+              const code = nameToCode[oreName];
+
+              if (!code) continue;
+
+              const row = rowMap.get(code);
+              if (!row) continue;
+
+              const active = card.matches(
+                  'a[href*="cmd=mines"][href*="do=trade"][href*="trade="]'
+              );
+
+              card.dataset.ore = code;
+              card.dataset.kind = code === 'Bl' ? 'black' : 'core';
+              card.dataset.mttTip = buildMttTradeCardTip(row, active);
+              card.removeAttribute('title');
+          }
+      }
 
       function installMttTradeTooltip() {
           const disclosure = getMttTradeDisclosure();
