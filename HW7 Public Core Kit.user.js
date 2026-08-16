@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      1.1.3
+// @version      2.4
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -416,10 +416,12 @@ function hw7RunDocumentEndModules() {
     const K_ENTRIES = 'jbgl_entries_v1';
     const K_LAST_FP = 'jbgl_last_fp_v1';
     const K_T_STATE = 'jbgl_t_state_v1';
+    const K_COLLAPSED_HOURS = 'jbgl_collapsed_hours_v1';
 
 
     const MAX_ROWS = 5000;
     const PANEL_WIDTH = 355;
+    const JBET_ROW_GRID = '22% 13% 13% 13% 13% 10% 10% 6%';
     let jungleImportOpen = false;
 
     const href = String(location.href || '');
@@ -629,6 +631,29 @@ function hw7RunDocumentEndModules() {
       state.hourT[hourKey] = (state.hourT[hourKey] || 0) + 1;
     }
 
+    function loadCollapsedHours() {
+      try {
+        const v = JSON.parse(GM_getValue(K_COLLAPSED_HOURS, '{}'));
+        return v && typeof v === 'object' ? v : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveCollapsedHours(v) {
+      GM_setValue(
+        K_COLLAPSED_HOURS,
+        JSON.stringify(v && typeof v === 'object' ? v : {})
+      );
+    }
+
+    function isHourCollapsed(hourKey, activeHourKey, collapsedMap) {
+      if (Object.prototype.hasOwnProperty.call(collapsedMap, hourKey)) {
+        return !!collapsedMap[hourKey];
+      }
+      return String(hourKey || '') !== String(activeHourKey || '');
+    }
+
     function isFailedStepPage(html, text) {
       const raw = `${html}
   ${text}`;
@@ -774,6 +799,7 @@ function hw7RunDocumentEndModules() {
       const t = sumRows(rows, () => true);
       const storedT = state && Number.isFinite(state.totalT) ? state.totalT : null;
       t.t = storedT != null ? storedT : Math.round(t.t || 0);
+      t.berries = Array.isArray(rows) ? rows.length : 0;
       return t;
     }
 
@@ -838,36 +864,37 @@ function hw7RunDocumentEndModules() {
       }
 
     function render(rows, state) {
-        injectJgLayoutStyle();
-        reorderJungleTableCells();
-      const oldBox = document.getElementById('jbgl-box');
-      if (oldBox) oldBox.remove();
+      const oldWrap = document.getElementById('jbgl-inline-wrap');
+      if (oldWrap) oldWrap.remove();
 
-      const oldControls = document.getElementById('jbgl-controls');
-      if (oldControls) oldControls.remove();
+      const legacyIds = ['jbgl-box', 'jbgl-controls', 'jbgl-footer', 'jbgl-import-toggle'];
+      for (const id of legacyIds) document.getElementById(id)?.remove();
 
-      const oldFooter = document.getElementById('jbgl-footer');
-      if (oldFooter) oldFooter.remove();
+      const host =
+        document.querySelector('.content-area') ||
+        document.getElementById('main') ||
+        document.body;
+      if (!host) return;
 
-      const oldImportToggle = document.getElementById('jbgl-import-toggle');
-      if (oldImportToggle) oldImportToggle.remove();
+      const inlineWrap = document.createElement('div');
+      inlineWrap.id = 'jbgl-inline-wrap';
+      inlineWrap.style.boxSizing = 'border-box';
+      inlineWrap.style.width = '100%';
+      inlineWrap.style.maxWidth = '100%';
+      inlineWrap.style.margin = '8px 0 0';
+      inlineWrap.style.fontFamily = 'Consolas, monospace';
 
       const box = document.createElement('div');
       box.id = 'jbgl-box';
-      box.style.position = 'fixed';
-      box.style.left = '955px';
-      box.style.top = '105px';
-      box.style.bottom = '100px';
-      box.style.width = `${PANEL_WIDTH}px`;
-      box.style.zIndex = '99999';
+      box.style.boxSizing = 'border-box';
+      box.style.width = '100%';
       box.style.padding = '2px';
       box.style.background = 'rgba(0,0,0,0.95)';
       box.style.border = '1px solid #2f2f2f';
-      box.style.outline = '1.5px solid #afc';
-      box.style.borderRadius = '3px';
+      box.style.outline = '1px solid #afc';
+      box.style.borderRadius = '3px 3px 0 0';
       box.style.display = 'flex';
       box.style.flexDirection = 'column';
-      box.style.fontFamily = 'Consolas, monospace';
       box.style.fontSize = '11px';
       box.style.lineHeight = '1.2';
       box.style.color = '#f4f4f4';
@@ -879,71 +906,71 @@ function hw7RunDocumentEndModules() {
       headerWrap.style.backgroundColor = '#efefef';
       headerWrap.style.color = '#000000';
       headerWrap.style.fontWeight = 'bold';
-      headerWrap.appendChild(makeTextRow('Timestamp', null, true));
+      const headerRow = makeTextRow('Timestamp', null, true, 'Qty');
+      headerWrap.appendChild(headerRow);
 
       const body = document.createElement('div');
-      body.style.flex = '1 1 auto';
+      body.style.boxSizing = 'border-box';
+      body.style.maxHeight = '118px';
       body.style.overflowY = 'auto';
       body.style.padding = '2px 3px 2px 5px';
 
       const hours = orderedHourKeys(rows, state);
+      const collapsedMap = loadCollapsedHours();
+      const activeHourKey = currentHourKey(rows);
+
       hours.forEach((hk, i) => {
         if (i > 0) body.appendChild(makeSeparator());
-        body.appendChild(makeTotalsRow(formatHourLabel(hk), makeHourTotals(rows, state, hk)));
-        for (const row of rows) {
-          if (row.hourKey === hk) body.appendChild(makeEventRow(row));
+        const collapsed = isHourCollapsed(hk, activeHourKey, collapsedMap);
+        body.appendChild(
+          makeHourHeader(
+            hk,
+            makeHourTotals(rows, state, hk),
+            countHourEvents(rows, hk),
+            collapsed,
+            rows,
+            state
+          )
+        );
+        if (!collapsed) {
+          for (const row of rows) {
+            if (row.hourKey === hk) body.appendChild(makeEventRow(row));
+          }
         }
       });
 
       const footer = document.createElement('div');
       footer.id = 'jbgl-footer';
-      footer.style.position = 'fixed';
-      footer.style.left = '955px';
-      footer.style.bottom = '60px';
-      footer.style.width = `${PANEL_WIDTH}px`;
-      footer.style.zIndex = '99999';
+      footer.style.boxSizing = 'border-box';
+      footer.style.width = '100%';
       footer.style.background = 'rgba(0,0,0,0.95)';
-      footer.style.border = '1px solid #1f1f1f';
-      footer.style.borderTop = '1px solid #1f1f1f';
-      footer.style.borderLeft = '1px solid #2f2f2f';
-      footer.style.borderRight = '1px solid #2f2f2f';
-      footer.style.borderBottom = '1px solid #2f2f2f';
-      footer.style.outline = '2px outset #0bf';
-      footer.style.borderRadius = '3px';
-      footer.style.height = '30px';
-      footer.style.fontFamily = 'Consolas, monospace';
+      footer.style.border = '1px solid #2f2f2f';
+      footer.style.borderTop = '0';
+      footer.style.padding = '4px 6px';
       footer.style.fontSize = '10.8px';
-      footer.style.lineHeight = '30px';
+      footer.style.lineHeight = '1.35';
       footer.style.color = '#d8d8d8';
       if (jungleImportOpen) {
         footer.appendChild(makeJungleImportButton(rows, state));
       } else {
-        footer.appendChild(makeFooterTotalsRow('- - TOTAL - - ', makeTotalTotals(rows, state)));
+        footer.appendChild(makeFooterTotalsRow('TOTAL', makeTotalTotals(rows, state)));
       }
-
-      box.appendChild(headerWrap);
-      box.appendChild(body);
-      document.body.appendChild(box);
-      document.body.appendChild(footer);
 
       const controls = document.createElement('div');
       controls.id = 'jbgl-controls';
-      controls.style.position = 'fixed';
-      controls.style.left = '1025px';
-      controls.style.bottom = '15px';
-      controls.style.width = `calc(${PANEL_WIDTH}px - 80px)`;
-      controls.style.display = 'grid';
-      controls.style.gridTemplateColumns = '124px 124px';
+      controls.style.boxSizing = 'border-box';
+      controls.style.display = 'flex';
+      controls.style.flexWrap = 'wrap';
       controls.style.justifyContent = 'center';
-      controls.style.columnGap = '6px';
-      controls.style.rowGap = '4px';
-      controls.style.zIndex = '99999';
+      controls.style.gap = '5px';
+      controls.style.width = '100%';
+      controls.style.padding = '5px';
       controls.style.background = 'rgba(20,20,20,.75)';
-      controls.style.outline = '2px inset #8bfb';
-      controls.style.borderRadius = '5px';
-      controls.style.padding = '3px 0';
+      controls.style.border = '1px solid #2f2f2f';
+      controls.style.borderTop = '0';
+      controls.style.borderRadius = '0 0 3px 3px';
 
-      function makeBtn(label, width = '120px') {
+      function makeBtn(label) {
         const btn = document.createElement('a');
         btn.href = '#';
         btn.className = 'btn light-blue hover-green';
@@ -951,65 +978,69 @@ function hw7RunDocumentEndModules() {
         btn.style.display = 'inline-flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
-        btn.style.width = width;
-        btn.style.height = '24px';
+        btn.style.minWidth = '92px';
+        btn.style.height = '22px';
         btn.style.whiteSpace = 'nowrap';
-        btn.style.fontSize = '16px';
+        btn.style.fontSize = '12px';
         btn.style.textTransform = 'uppercase';
-        btn.style.paddingTop = '8px';
-        btn.style.paddingBottom = '8px';
+        btn.style.padding = '4px 8px';
         return btn;
       }
 
-      const exportBtn = makeBtn('Export', '120px');
-      exportBtn.addEventListener('click', (e) => {
-        e.preventDefault();
+      const exportBtn = makeBtn('Export');
+      exportBtn.addEventListener('click', event => {
+        event.preventDefault();
         exportRows(rows, state);
       });
 
-      const clearBtn = makeBtn('Clear', '120px');
-      clearBtn.addEventListener('click', (e) => {
-        e.preventDefault();
+      const clearBtn = makeBtn('Clear');
+      clearBtn.addEventListener('click', event => {
+        event.preventDefault();
         saveEntries([]);
         GM_setValue(K_LAST_FP, '');
+        GM_setValue(K_COLLAPSED_HOURS, '{}');
         saveTState({ totalT: 0, epochT: 0, hourT: {} });
         render([], normalizeTState({}));
       });
 
-      const importToggle = document.createElement('a');
+      const importToggle = makeBtn(jungleImportOpen ? 'Totals' : 'Import');
       importToggle.id = 'jbgl-import-toggle';
-      importToggle.href = '#';
-      importToggle.title = jungleImportOpen ? 'Hide import' : 'Show import';
-      importToggle.textContent = jungleImportOpen ? '▼' : '▲';
-      importToggle.style.position = 'fixed';
-      importToggle.style.left = `965px`;
-      importToggle.style.bottom = '18px';
-      importToggle.style.width = '20px';
-      importToggle.style.height = '20px';
-      importToggle.style.padding = '4px 0 6px';
-      importToggle.style.zIndex = '100000';
-      importToggle.style.display = 'inline-flex';
-      importToggle.style.alignItems = 'center';
-      importToggle.style.justifyContent = 'center';
-      importToggle.style.borderRadius = '50%';
-      importToggle.style.background = 'rgba(20,20,20,.90)';
-      importToggle.style.border = '1px solid #2f2f2f';
-      importToggle.style.outline = '2px inset #8bfb';
-      importToggle.style.color = '#f4f4f4';
-      importToggle.style.fontFamily = 'Consolas, monospace';
-      importToggle.style.fontSize = '24px';
-      importToggle.style.fontWeight = 'bold';
-      importToggle.style.lineHeight = '1';
-      importToggle.style.textDecoration = 'none';
-      importToggle.addEventListener('click', (e) => {
-        e.preventDefault();
+      importToggle.title = jungleImportOpen ? 'Show totals' : 'Show import control';
+      importToggle.addEventListener('click', event => {
+        event.preventDefault();
         jungleImportOpen = !jungleImportOpen;
         render(rows, state);
       });
 
-      controls.append(exportBtn, clearBtn);
-      document.body.appendChild(controls);
-      document.body.appendChild(importToggle);
+      controls.append(exportBtn, clearBtn, importToggle);
+      box.append(headerWrap, body);
+      inlineWrap.append(box, footer, controls);
+
+      // Keep JBET directly beneath the native Technicolor Jungle interface.
+      // Appending to .content-area can place the panel below a full-height
+      // native layout block, effectively pushing it out of the viewport.
+      const leaveJungleLink = Array.from(host.querySelectorAll('a')).find(link =>
+        /leave technicolor jungle/i.test(link.textContent || '')
+      );
+
+      if (leaveJungleLink) {
+        let jungleBlock = leaveJungleLink;
+
+        // Promote the link to the top-level child of the selected host so the
+        // tracker is inserted after the complete native Jungle block, not
+        // inside one of its nested table cells.
+        while (jungleBlock.parentElement && jungleBlock.parentElement !== host) {
+          jungleBlock = jungleBlock.parentElement;
+        }
+
+        if (jungleBlock.parentElement === host) {
+          jungleBlock.insertAdjacentElement('afterend', inlineWrap);
+        } else {
+          host.appendChild(inlineWrap);
+        }
+      } else {
+        host.appendChild(inlineWrap);
+      }
     }
 
     function makeJungleImportButton(rows, state) {
@@ -1088,7 +1119,7 @@ function hw7RunDocumentEndModules() {
       for (const line of lines) {
         // Preserve the fixed-width blank first column after "<". Do NOT use "<\s*" here:
         // that strips the STR blank cell and makes the first separator look like data.
-        const m = line.match(/^(\d{2}\s+[A-Z]{3})-(\d{2}):(\d{2})\s*<([\s\S]*?)>\s*$/i);
+        const m = line.match(/^(\d{2}\s+[A-Z]{3})-(\d{2}):(\d{2})\s*<([\s\S]*?)>\s*(?:#\d+)?\s*$/i);
         if (!m) continue;
 
         const dateKey = m[1].toUpperCase();
@@ -1237,53 +1268,100 @@ function hw7RunDocumentEndModules() {
       return row;
     }
 
-    function makeTextRow(leftText, totals, isLegend = false) {
-      const row = document.createElement('div');
-      row.style.whiteSpace = 'pre';
-      row.style.display = 'flex';
+    function styleJbetGridRow(row) {
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = JBET_ROW_GRID;
       row.style.alignItems = 'center';
+      row.style.width = '100%';
+      row.style.boxSizing = 'border-box';
+      row.style.whiteSpace = 'nowrap';
+      return row;
+    }
 
-      const label = document.createElement('span');
-      label.style.display = 'inline-block';
-      label.style.width = '13ch';
-      label.textContent = String(leftText || '').padEnd(13, ' ');
-      row.appendChild(label);
+    function makeJbetLabelCell(text, marker = '<') {
+      const cell = document.createElement('span');
+      cell.style.display = 'flex';
+      cell.style.alignItems = 'center';
+      cell.style.justifyContent = 'space-between';
+      cell.style.minWidth = '0';
+      cell.style.paddingRight = '4px';
 
-      const open = document.createElement('span');
-      open.textContent = '< ';
-      row.appendChild(open);
+      const value = document.createElement('span');
+      value.style.overflow = 'hidden';
+      value.style.textOverflow = 'ellipsis';
+      value.textContent = String(text || '');
+      cell.appendChild(value);
+
+      if (marker) {
+        const mark = document.createElement('span');
+        mark.textContent = marker;
+        cell.appendChild(mark);
+      }
+
+      return cell;
+    }
+
+    function makeJbetDataCell(text, color = '') {
+      const cell = document.createElement('span');
+      cell.style.display = 'grid';
+      cell.style.gridTemplateColumns = 'auto 1fr';
+      cell.style.alignItems = 'center';
+      cell.style.minWidth = '0';
+
+      const sep = document.createElement('span');
+      sep.textContent = '|';
+      sep.style.color = '#666';
+      sep.style.opacity = '0.7';
+      cell.appendChild(sep);
+
+      const value = document.createElement('span');
+      value.style.textAlign = 'center';
+      value.style.minWidth = '0';
+      value.style.overflow = 'hidden';
+      value.style.textOverflow = 'ellipsis';
+      value.textContent = String(text ?? '');
+      if (color) value.style.color = color;
+      cell.appendChild(value);
+
+      return cell;
+    }
+
+    function makeJbetPlainCell(text, color = '') {
+      const cell = document.createElement('span');
+      cell.style.minWidth = '0';
+      cell.style.textAlign = 'center';
+      cell.style.overflow = 'hidden';
+      cell.style.textOverflow = 'ellipsis';
+      cell.textContent = String(text ?? '');
+      if (color) cell.style.color = color;
+      return cell;
+    }
+
+    function makeTextRow(leftText, totals, isLegend = false, qty = '') {
+      const row = styleJbetGridRow(document.createElement('div'));
+      row.appendChild(makeJbetLabelCell(leftText));
 
       const cols = ['str', 'pow', 'spd', 'mlg', 't'];
-      cols.forEach((key, i) => {
-        const span = document.createElement('span');
-        span.style.display = 'inline-block';
-        span.style.width = panelColWidth(key);
-        span.style.textAlign = 'right';
+      cols.forEach(key => {
+        let text;
+        let color = '';
 
         if (isLegend || !totals) {
-          span.textContent = panelHeaderText(key);
+          text = panelHeaderText(key).trim();
         } else {
-          span.textContent = key === 'mlg'
+          text = key === 'mlg'
             ? fmtPanelInt(totals[key], 4, '----')
             : key === 't'
               ? fmtPanelInt(totals[key], 3, '---')
               : fmtPanelStat(totals[key]);
-          span.style.color = cellColor(key, null);
+          color = cellColor(key, null);
         }
 
-        row.appendChild(span);
-
-        if (i < cols.length - 1) {
-          const sep = document.createElement('span');
-          sep.textContent = ' | ';
-          row.appendChild(sep);
-        }
+        row.appendChild(makeJbetDataCell(text, color));
       });
 
-      const close = document.createElement('span');
-      close.textContent = ' >';
-      row.appendChild(close);
-
+      row.appendChild(makeJbetPlainCell(qty, qty !== '' ? '#d860a8' : ''));
+      row.appendChild(makeJbetPlainCell(''));
       return row;
     }
 
@@ -1291,109 +1369,88 @@ function hw7RunDocumentEndModules() {
       return makeTextRow(label, totals, false);
     }
 
+    function countHourEvents(rows, hourKey) {
+      let count = 0;
+      for (const row of rows) {
+        if (row && row.hourKey === hourKey) count += 1;
+      }
+      return count;
+    }
+
+    function makeHourHeader(hourKey, totals, berryCount, collapsed, rows, state) {
+      const row = makeTextRow(formatHourLabel(hourKey), totals, false, berryCount);
+      const qtyCell = row.children[6];
+      if (qtyCell) qtyCell.title = `${berryCount} berry event${berryCount === 1 ? '' : 's'}`;
+
+      const actionCell = row.children[7];
+      const collapseBtn = document.createElement('button');
+      collapseBtn.type = 'button';
+      collapseBtn.style.cursor = 'pointer';
+      collapseBtn.style.borderRadius = '3px';
+      collapseBtn.style.fontSize = '8px';
+      collapseBtn.style.padding = '1px 2px';
+      collapseBtn.style.lineHeight = '9px';
+      collapseBtn.style.fontFamily = 'Consolas, monospace';
+      collapseBtn.style.backgroundColor = collapsed ? '#dfd' : '#fdd';
+      collapseBtn.title = collapsed ? 'Expand hour' : 'Collapse hour';
+      collapseBtn.textContent = collapsed ? '[+]' : '[-]';
+      collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+      collapseBtn.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const map = loadCollapsedHours();
+        map[hourKey] = !collapsed;
+        saveCollapsedHours(map);
+        render(rows, state);
+      });
+
+      if (actionCell) actionCell.appendChild(collapseBtn);
+      return row;
+    }
+
     function makeEventRow(rowData) {
-      const row = document.createElement('div');
-      row.style.whiteSpace = 'pre';
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-
-      const label = document.createElement('span');
-      label.style.display = 'inline-block';
-      label.style.width = '13ch';
-      label.textContent = eventTimeLabel(rowData).padStart(13, ' ');
-      row.appendChild(label);
-
-      const open = document.createElement('span');
-      open.textContent = '< ';
-      row.appendChild(open);
+      const row = styleJbetGridRow(document.createElement('div'));
+      row.appendChild(makeJbetLabelCell(eventTimeLabel(rowData)));
 
       const cells = ['str', 'pow', 'spd', 'mlg', 't'];
-      cells.forEach((key, i) => {
-        const span = document.createElement('span');
-        span.style.display = 'inline-block';
-        span.style.width = panelColWidth(key);
-        span.style.textAlign = 'right';
-        span.textContent = key === 'mlg'
+      cells.forEach(key => {
+        const text = key === 'mlg'
           ? fmtPanelInt(rowData[key], 4, '----')
           : key === 't'
             ? fmtPanelInt(rowData[key], 3, '---')
             : fmtPanelStat(rowData[key]);
 
-        if (rowData[key] != null) {
-          span.style.color = cellColor(key, rowData);
-        }
-        else {
-                 span.style.color = '#44444488';
-                }
+        const color = rowData[key] != null
+          ? cellColor(key, rowData)
+          : '#44444488';
 
-        row.appendChild(span);
-
-        if (i < cells.length - 1) {
-          const sep = document.createElement('span');
-          sep.textContent = ' | ';
-          row.appendChild(sep);
-        }
+        row.appendChild(makeJbetDataCell(text, color));
       });
 
-      const close = document.createElement('span');
-      close.textContent = ' >';
-      row.appendChild(close);
-
+      row.appendChild(makeJbetPlainCell(''));
+      row.appendChild(makeJbetPlainCell(''));
       return row;
     }
 
     function makeFooterTotalsRow(label, totals) {
-      const row = document.createElement('div');
-      row.style.whiteSpace = 'pre';
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-
-      const ts = document.createElement('span');
-      ts.style.display = 'inline-block';
-      ts.style.width = '14ch';
-      ts.textContent = String(label || '').padEnd(14, ' ');
-      row.appendChild(ts);
-
-      const open = document.createElement('span');
-      open.textContent = '< ';
-      row.appendChild(open);
+      const row = styleJbetGridRow(document.createElement('div'));
+      row.appendChild(makeJbetLabelCell(label));
 
       const cols = ['str', 'pow', 'spd', 'mlg', 't'];
-      cols.forEach((key, i) => {
-        const span = document.createElement('span');
-        span.style.display = 'inline-block';
-        span.style.width = oldColWidth(key);
-        span.style.textAlign = 'right';
-        span.textContent = key === 'mlg' || key === 't'
+      cols.forEach(key => {
+        const text = key === 'mlg' || key === 't'
           ? fmtTotal(totals[key], true)
           : fmtTotal(totals[key], false);
-        span.style.color = cellColor(key, null);
-        row.appendChild(span);
-
-        if (i < cols.length - 1) {
-          const sep = document.createElement('span');
-          sep.textContent = ' - ';
-          row.appendChild(sep);
-        }
+        row.appendChild(makeJbetDataCell(text, cellColor(key, null)));
       });
 
-      const close = document.createElement('span');
-      close.textContent = ' >';
-      row.appendChild(close);
-
+      const berryCount = Number(totals && totals.berries) || 0;
+      const qtyCell = makeJbetPlainCell(berryCount, '#d860a8');
+      qtyCell.title = 'Total berry events';
+      row.appendChild(qtyCell);
+      row.appendChild(makeJbetPlainCell(''));
       return row;
-    }
-
-    function panelColWidth(key) {
-      if (key === 'mlg') return '4ch';
-      if (key === 't') return '3ch';
-      return '6ch';
-    }
-
-    function oldColWidth(key) {
-      if (key === 'mlg') return '6ch';
-      if (key === 't') return '4ch';
-      return '7ch';
     }
 
     function panelHeaderText(key) {
@@ -1559,10 +1616,11 @@ function hw7RunDocumentEndModules() {
       const K_SWIM_DAILY = `mtt_swim_daily_schema_${STORAGE_SCHEMA}`;
       const K_COLLAPSED_DAYS = `mtt_collapsed_days_schema_${STORAGE_SCHEMA}`;
       const K_HOBALT_COLLAPSED = `mtt_hobalt_collapsed_schema_${STORAGE_SCHEMA}`;
+      const K_BL_COLLAPSED = `mtt_collapsed_bl_schema_${STORAGE_SCHEMA}`;
       const K_MINE_DAY_LOG = `mtt_mine_day_log_schema_${STORAGE_SCHEMA}`;
       const K_TOPBAR_LAST_TRADE = `mtt_topbar_last_trade_bridge_v1`;
 
-      const MAX_ROWS = 4500;
+      const MAX_ROWS = 4650;
       const PANEL_WIDTH = 410;
 
       const ORE_IDS = {
@@ -1619,11 +1677,12 @@ function hw7RunDocumentEndModules() {
       };
 
       const SOURCE_COLORS = {
-          str: '#88ff88b8',
-          spd: '#eeee00b8',
-          pow: '#ff8800b8',
-          tbs: '#fafafab8',
-          life: '#e6e6e6b8'
+          str: COLORS.str,
+          spd: COLORS.spd,
+          pow: COLORS.pow,
+          tbs: COLORS.tbs,
+          life: COLORS.life,
+          traded: '#848484'
       };
 
       const ORE_ICON_COLORS = {
@@ -1652,7 +1711,11 @@ function hw7RunDocumentEndModules() {
 
       const stock = parseOreStock();
       const rawTradePost = parseTradePost();
-      const tradePost = mergeWithPersistedTradeTable(rawTradePost);
+      const persistedTradePost = mergeWithPersistedTradeTable(rawTradePost);
+      const tradePost = applyMineInteriorPreviewCounts(
+          persistedTradePost,
+          stock
+      );
       const completedTrade = parseCompletedTradeResult();
       publishTopbarLastTrade(completedTrade, summary);
       const tradeLedger = updateAndLoadTradeLedger(completedTrade, tradePost);
@@ -1908,6 +1971,11 @@ function hw7RunDocumentEndModules() {
           wrap.id = 'mtt-trade-bl';
           wrap.className = 'mtt-trade-bl mtt-trade-toggle-ready';
 
+          const label = document.createElement('div');
+          label.className = 'mtt-trade-section-label mtt-trade-bl-label';
+          label.setAttribute('role', 'button');
+          label.tabIndex = 0;
+
           const card = active
           ? document.createElement('a')
           : document.createElement('div');
@@ -1975,9 +2043,36 @@ function hw7RunDocumentEndModules() {
           card.appendChild(body);
           card.appendChild(foot);
 
+          wrap.appendChild(label);
           wrap.appendChild(card);
+          bindBlCollapse(wrap, label);
 
           return wrap;
+      }
+
+      function bindBlCollapse(wrap, label) {
+          let collapsed = !!GM_getValue(K_BL_COLLAPSED, false);
+
+          const applyState = () => {
+              wrap.classList.toggle('mtt-trade-collapsed', collapsed);
+              label.textContent = collapsed ? 'Black Ore ▼' : 'Black Ore ▲';
+              label.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          };
+
+          const toggle = () => {
+              collapsed = !collapsed;
+              GM_setValue(K_BL_COLLAPSED, collapsed);
+              applyState();
+          };
+
+          label.addEventListener('click', toggle);
+          label.addEventListener('keydown', event => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              toggle();
+          });
+
+          applyState();
       }
 
       function buildOreHexIcon(code) {
@@ -3166,6 +3261,31 @@ function hw7RunDocumentEndModules() {
           return out;
       }
 
+      function applyMineInteriorPreviewCounts(tradePost, stock) {
+          if (!isMineInterior && !isBlastPage) return tradePost;
+          if (!tradePost || typeof tradePost !== 'object') return tradePost;
+          if (!stock || typeof stock !== 'object') return tradePost;
+
+          const rows = Array.isArray(tradePost.rows) ? tradePost.rows : [];
+
+          return {
+              ...tradePost,
+              rows: rows.map(row => {
+                  if (!row || !TRADE_ORES.includes(row.code)) return row;
+
+                  const oreOwned = Number(stock[row.code]);
+                  if (!Number.isFinite(oreOwned) || oreOwned < 0) return row;
+
+                  const remaining = Math.floor(oreOwned / 3);
+                  return {
+                      ...row,
+                      remaining,
+                      available: remaining > 0
+                  };
+              })
+          };
+      }
+
       function loadPersistedTradeLedger() {
           try {
               const v = JSON.parse(GM_getValue(K_TRADE_LEDGER, '{}'));
@@ -3753,6 +3873,8 @@ function hw7RunDocumentEndModules() {
           for (const [k, v] of Object.entries(parsed)) {
               map[k] = {
                   dayKey: k,
+                  str: v.str,
+                  pow: v.pow,
                   spd: v.spd,
                   life: v.life,
                   source: 'jungle-export',
@@ -3774,15 +3896,20 @@ function hw7RunDocumentEndModules() {
 
               const key = `${String(parseInt(m[1], 10)).padStart(2, '0')} ${m[2].toUpperCase()}`;
               const parts = String(m[3]).split('-');
-              if (parts.length < 3) continue;
+              if (parts.length < 4) continue;
 
+              const str = parseMaybeFloat(parts[0]);
+              const pow = parseMaybeFloat(parts[1]);
               const spd = parseMaybeFloat(parts[2]);
               const life = parseMaybeFloat(parts[3]);
-              if (!Number.isFinite(spd) && !Number.isFinite(life)) continue;
 
-              if (!out[key]) out[key] = { spd: 0, life: 0 };
-              if (Number.isFinite(spd)) out[key].spd += spd;
-              if (Number.isFinite(life)) out[key].life += life;
+              if (![str, pow, spd, life].some(Number.isFinite)) continue;
+
+              if (!out[key]) out[key] = { str: 0, pow: 0, spd: 0, life: 0 };
+              if (Number.isFinite(str) && Math.abs(str) > 0.000001) out[key].str += str;
+              if (Number.isFinite(pow) && Math.abs(pow) > 0.000001) out[key].pow += pow;
+              if (Number.isFinite(spd) && Math.abs(spd) > 0.000001) out[key].spd += spd;
+              if (Number.isFinite(life) && Math.abs(life) > 0.000001) out[key].life += life;
           }
 
           return out;
@@ -4063,7 +4190,7 @@ function hw7RunDocumentEndModules() {
 
       function renderBalanceSourceLine(balance) {
           const div = document.createElement('div');
-          div.style.fontSize = '11px';
+          div.style.fontSize = '15px';
           div.style.lineHeight = '1.25';
           div.style.marginTop = '3px';
           const swimParts = [
@@ -4469,44 +4596,72 @@ function hw7RunDocumentEndModules() {
       }
 
       function renderTradeDayHeader(day, collapsed, s, rows, state, balance) {
-          const wrap = document.createElement('div');
-          wrap.style.cursor = 'default';
+          const dayWrap = document.createElement('div');
+          dayWrap.style.margin = '2px -3px 0';
+          dayWrap.style.padding = '0 0 0 5px';
+          dayWrap.style.lineHeight = '22px';
+          dayWrap.style.borderTop = '1px solid rgba(255,255,255,.28)';
+          dayWrap.style.borderBottom = '1px solid rgba(255,255,255,.14)';
+          dayWrap.style.cursor = 'default';
+          dayWrap.style.fontSize = '13px';
 
           const totals = balance && balance.net ? balance.net : day.totals;
+          const sep = text => {
+              const span = document.createElement('span');
+              span.textContent = text;
+              span.style.color = 'rgba(221,221,221,.38)';
+              return span;
+          };
 
-          wrap.appendChild(textNode(`${day.dayKey} `));
-          appendStatSpan(wrap, totals.spd, 'SPD', COLORS.spd, 5, 0);
-          wrap.appendChild(textNode(' '));
-          appendStatSpan(wrap, totals.pow, 'POW', COLORS.pow, 5, 0);
-          wrap.appendChild(textNode(' '));
-          appendStatSpan(wrap, totals.str, 'STR', COLORS.str, 5, 0);
-          wrap.appendChild(textNode(' '));
-          appendStatSpan(wrap, totals.tbs, 'TBS', COLORS.tbs, 8, 2);
+          dayWrap.appendChild(textNode(`${String(Number.parseInt(day.dayKey, 10)).padStart(2, ' ')}: `));
+          appendStatSpan(dayWrap, totals.spd, '', COLORS.spd, 5, 0);
+          dayWrap.appendChild(sep(' | '));
+          appendStatSpan(dayWrap, totals.pow, '', COLORS.pow, 5, 0);
+          dayWrap.appendChild(sep(' | '));
+          appendStatSpan(dayWrap, totals.str, '', COLORS.str, 5, 0);
+          dayWrap.appendChild(sep(' < '));
+          appendStatSpan(dayWrap, totals.tbs, '', COLORS.tbs, 5, 0);
+          dayWrap.appendChild(textNode(' TBS > '));
+          appendStatSpan(dayWrap, totals.life, 'Life', COLORS.life, 6, 0);
+          dayWrap.appendChild(sep(' | '));
+
+          const tradeCount = document.createElement('span');
+          tradeCount.style.color = '#b8b8b8';
+          tradeCount.textContent = `Trades ${fmtInt(day.count, 3)}`;
+          dayWrap.appendChild(tradeCount);
 
           const collapseBtn = document.createElement('button');
           collapseBtn.type = 'button';
           collapseBtn.style.cursor = 'pointer';
           collapseBtn.style.borderRadius = '3px';
           collapseBtn.style.fontSize = '8px';
-          collapseBtn.style.padding = '0 1px 1px';
-          collapseBtn.style.marginLeft = '15px';
-          collapseBtn.style.lineHeight = '1';
+          collapseBtn.style.padding = '1px';
+          collapseBtn.style.marginLeft = '10px';
+          collapseBtn.style.lineHeight = '9px';
           collapseBtn.style.fontFamily = 'Consolas, monospace';
           collapseBtn.style.backgroundColor = collapsed ? '#dfd' : '#fdd';
           collapseBtn.title = collapsed ? 'Click to expand.' : 'Click to collapse.';
           collapseBtn.textContent = collapsed ? '[+]' : '[-]';
+          collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          dayWrap.appendChild(collapseBtn);
 
-          wrap.appendChild(collapseBtn);
-          //wrap.appendChild(textNode(`> ${collapsed ? '[+]' : '[-]'}`));
-
-          wrap.addEventListener('click', () => {
+          dayWrap.addEventListener('click', event => {
+              if (event.target === collapseBtn) return;
+              const map = loadCollapsedDays();
+              map[day.dayKey] = !collapsed;
+              saveCollapsedDays(map);
+              render(s, rows, state);
+          });
+          collapseBtn.addEventListener('click', event => {
+              event.preventDefault();
+              event.stopPropagation();
               const map = loadCollapsedDays();
               map[day.dayKey] = !collapsed;
               saveCollapsedDays(map);
               render(s, rows, state);
           });
 
-          return wrap;
+          return dayWrap;
       }
 
       function renderTradeDaySources(balance) {
@@ -6303,12 +6458,27 @@ function hw7RunDocumentEndModules() {
                   }
 
                   #mtt-trade-bl .mtt-trade-section-label {
-                    display: block;
-                    margin: 0 0 4px;
-                    font-weight: bold;
+                    display: inline-block;
+                    margin: 0 auto 5px;
+                    padding: 1px 12px;
+                    border: 1px solid #f0aaaa;
+                    border-radius: 8px;
+                    background: #fff8bb;
                     color: #111111;
+                    font-weight: bold;
+                    line-height: 1.2;
                     white-space: nowrap;
                     text-align: center;
+                    cursor: pointer;
+                    user-select: none;
+                  }
+
+                  #mtt-trade-bl.mtt-trade-collapsed .mtt-trade-section-label {
+                    margin-bottom: 0;
+                  }
+
+                  #mtt-trade-bl.mtt-trade-collapsed .mtt-trade-bl-card {
+                    display: none !important;
                   }
 
                   #mtt-trade-bl .mtt-trade-bl-card {
@@ -6853,37 +7023,54 @@ function hw7RunDocumentEndModules() {
     }
 
     function renderTopbar(stats) {
-      const topCenter = document.querySelector('div.topbar > div.top-center');
-      if (!topCenter) return;
+      // Match CSMP's layout-aware placement:
+      // The Future: insert as another topbar section after native stats.
+      // Legacy/standard layouts: insert after #playerStats and stack internally.
+      const futureStatsAnchor = document.querySelector('.topbar .top-center .section.stats');
+      const standardAnchor = document.querySelector('#playerStats');
+      const anchor = futureStatsAnchor || standardAnchor;
+      if (!anchor) return;
+
+      const layoutClass = futureStatsAnchor
+        ? 'hwtbs-layout-future'
+        : 'hwtbs-layout-standard';
 
       injectStyle();
       installTooltip();
 
-      let panel = document.querySelector('#hwtbs-topbar-panel');
+      let suite = document.querySelector('#hwtbs-suite-panel');
 
-      if (!panel) {
-        panel = document.createElement('div');
+      // If the user changes layout without clearing the DOM, rebuild against
+      // the correct anchor rather than retaining geometry from the old layout.
+      if (suite && !suite.classList.contains(layoutClass)) {
+        suite.remove();
+        suite = null;
+      }
+
+      if (!suite) {
+        suite = document.createElement('div');
+        suite.id = 'hwtbs-suite-panel';
+        suite.className = futureStatsAnchor
+          ? 'section battleStats hwtbs-layout-future'
+          : 'hwtbs-layout-standard';
+
+        const inner = document.createElement('div');
+        inner.className = 'hwtbs-suite-inner';
+
+        const panel = document.createElement('div');
         panel.id = 'hwtbs-topbar-panel';
 
-        if (topCenter.nextSibling) {
-          topCenter.parentNode.insertBefore(panel, topCenter.nextSibling);
-        } else {
-          topCenter.parentNode.appendChild(panel);
-        }
-      }
-
-      let rollPanel = document.querySelector('#hwtbs-roll-panel');
-
-      if (!rollPanel) {
-        rollPanel = document.createElement('div');
+        const rollPanel = document.createElement('div');
         rollPanel.id = 'hwtbs-roll-panel';
 
-        if (panel.nextSibling) {
-          panel.parentNode.insertBefore(rollPanel, panel.nextSibling);
-        } else {
-          panel.parentNode.appendChild(rollPanel);
-        }
+        inner.append(panel, rollPanel);
+        suite.appendChild(inner);
+        anchor.insertAdjacentElement('afterend', suite);
       }
+
+      const panel = suite.querySelector('#hwtbs-topbar-panel');
+      const rollPanel = suite.querySelector('#hwtbs-roll-panel');
+      if (!panel || !rollPanel) return;
 
       const spd = finiteOrNull(stats.spd);
       const pow = finiteOrNull(stats.pow);
@@ -6898,7 +7085,7 @@ function hw7RunDocumentEndModules() {
       const age = formatAge(stats.sourceAt);
 
       panel.removeAttribute('title');
-      panel.dataset.hwtbsTip = `TBS ${fmt(total)}\n( ${source}${age ? `, ${age}` : ''} )`;
+      panel.dataset.hwtbsTip = `TBS ${fmt(total)}\n(${source}${age ? `, ${age}` : ''})`;
 
       panel.innerHTML =
         renderStatLine('SPD', spd, total) +
@@ -6908,7 +7095,7 @@ function hw7RunDocumentEndModules() {
       const rolls = calcBaselineRollRanges({ spd, pow, str });
 
       rollPanel.removeAttribute('title');
-      rollPanel.dataset.hwtbsTip = `Base ranges.\n( ${source}${age ? `, ${age}` : ''} )`;
+      rollPanel.dataset.hwtbsTip = `Unequipped\n(${source}${age ? `, ${age}` : ''})`;
       rollPanel.innerHTML =
         renderRollLine('', rolls.speed, 'hwtbs-roll-speed') +
         renderRollLine('', rolls.damage, 'hwtbs-roll-damage') +
@@ -7127,153 +7314,181 @@ function hw7RunDocumentEndModules() {
       const style = document.createElement('style');
       style.id = 'hwtbs-topbar-style';
       style.textContent = `
-  .topbar .top-center {
-	width: 705px;
-	display: inline-block;
-    }
-  .topbar .top-left {
-	min-width: 64px;
-    }
-  #hwtbs-topbar-panel,
-  #hwtbs-roll-panel {
-  	border-left: 2px solid #181818;
-    border-right: 2px solid #181818;
-  	background: rgba(125,85,255,1);
-  	color: #111;
-  	font-family: Consolas, "Courier New", monospace;
-  	font-size: 13px;
-  	line-height: 22px;
-  	white-space: nowrap;
-  	display: block;
-  	width: 200px;
-  	min-width: 200px;
-  	max-width: 200px;
-  	position: fixed;
-  	left: 870px;
-  	top: 0;
-  	max-height: 67px;
-    overflow: clip;
-    text-overflow: ellipsis;
-  }
-  #hwtbs-roll-panel {
-    left: 1080px;
-    overflow: clip;
-    width: fit-content;
-    min-width: unset;
-  }
-  #hwtbs-topbar-panel .hwtbs-total {
-    font-weight: bold;
-    font-size: 11px;
-    border-bottom: 1px solid #0005;
-    padding-left: 4%;
-    background: rgb(255,255,255);
-  }
-  #hwtbs-topbar-panel .hwtbs-source {
-    color: #555;
-    font-family: Verdana, sans-serif;
-    font-size: 9px;
-    text-align: center;
-  }
-  .hwtbs-line {
-      background-color: #fafafa;
-  	padding: 0 1%;
-      height: 21.4px;
-      border-bottom: 1px solid #0003;
-      border-left: 2px solid #000;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-  }
-  .hwtbs-stat-value {
-      min-width: 0;
-  }
-  .hwtbs-stat-percent {
-      flex: 0 0 auto;
-      font-size: 10px;
-      font-style: normal;
-      font-weight: normal;
-      line-height: 1;
-      white-space: nowrap;
-  }
-  .hwtbs-line:nth-child(1) {
-      background-image: linear-gradient(rgba(230, 208, 90, .5));
-  }
-  .hwtbs-line:nth-child(2) {
-      background-image: linear-gradient(rgba(245, 166, 66, .5));
-  }
-  .hwtbs-line:nth-child(3) {
-  	background-image: linear-gradient(rgba(130, 245, 130, .5));
-  }
-  #hwtbs-roll-panel .hwtbs-roll-line {
-    background-color: #fafafa;
-    box-sizing: border-box;
-    height: 21.4px;
-    line-height: 22px;
-    padding: 0 6px;
-    border: 0 solid #181818;
-    border-bottom: 1px solid #0003;
-    border-right-width: 1px;
-    border-left-width: 2px;
-    font-size: 12px;
-    min-width: fit-content;
-  }
-  #hwtbs-roll-panel .hwtbs-roll-speed {
-      background-image: linear-gradient(rgba(230, 208, 90, 0.5));
-  }
-  #hwtbs-roll-panel .hwtbs-roll-damage {
-      background-image: linear-gradient(rgba(245, 166, 66, 0.5));
-  }
-  #hwtbs-roll-panel .hwtbs-roll-defense {
-  	background-image: linear-gradient(rgba(130, 245, 130, .5));
-  }
-  #hwtbs-tooltip {
-    position: fixed;
-    z-index: 2147483647;
-    padding: 3px 7px;
-    box-sizing: border-box;
+#hwtbs-suite-panel,
+#hwtbs-suite-panel * {
+  box-sizing: border-box;
+}
 
-    border: 1px solid #2f8fbc;
-    outline: 1px solid #000;
-    border-radius: 2px;
+#hwtbs-suite-panel {
+  min-width: 0;
+  color: #111;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 10px;
+  line-height: 16px;
+}
 
-    background: #252525;
-    color: #f7f7f7;
+/* The Future: participate in the native topbar flow, just as CSMP does. */
+#hwtbs-suite-panel.hwtbs-layout-future {
+  position: static;
+  margin: 0;
+  padding: 0;
+  vertical-align: top;
+}
 
-    font-family: Consolas, monospace;
-    font-size: 10px;
-    line-height: 1.25;
-    text-align: center;
-    white-space: pre-line;
+/* Legacy/standard layouts: live beneath #playerStats without fixed viewport coordinates. */
+#hwtbs-suite-panel.hwtbs-layout-standard {
+  width: 100%;
+  max-width: 100%;
+  margin: 3px 0;
+  border: 1px solid #181818;
+  overflow: hidden;
+}
 
-    pointer-events: none;
-    box-shadow: 1px 1px 3px 1px rgba(0,0,0,.5);
-    transition: opacity .4s linear;
-  }
-  #hwtbs-tooltip::before,
-  #hwtbs-tooltip::after {
-    content: '';
-    position: absolute;
-    left: var(--hwtbs-arrow-x);
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    pointer-events: none;
-  }
+.hwtbs-suite-inner {
+  display: grid;
+  min-width: 0;
+  border: 1px solid #181818;
+  overflow: hidden;
+}
 
-  #hwtbs-tooltip.hwtbs-tip-below::before {
-    top: -7px;
-    border-left: 7px solid transparent;
-    border-right: 7px solid transparent;
-    border-bottom: 7px solid #000;
-  }
+/* Future has horizontal topbar room: stats + rolls side by side. */
+#hwtbs-suite-panel.hwtbs-layout-future .hwtbs-suite-inner {
+  width: max-content;
+  grid-template-columns: max-content max-content;
+}
 
-  #hwtbs-tooltip.hwtbs-tip-below::after {
-    top: -5px;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 6px solid #252525;
-  }`;
+/* Legacy layouts get the same information stacked in the available player-stats width. */
+#hwtbs-suite-panel.hwtbs-layout-standard .hwtbs-suite-inner {
+  width: 100%;
+  border: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#hwtbs-topbar-panel,
+#hwtbs-roll-panel {
+  min-width: 0;
+  width: auto;
+  max-width: none;
+  position: static;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+#hwtbs-suite-panel.hwtbs-layout-future #hwtbs-topbar-panel {
+  border-right: 1px solid #181818;
+}
+
+#hwtbs-suite-panel.hwtbs-layout-standard #hwtbs-topbar-panel {
+  border-bottom: 1px solid #181818;
+}
+
+.hwtbs-line,
+#hwtbs-roll-panel .hwtbs-roll-line {
+  height: 17px;
+  min-width: 0;
+  padding: 0 3px;
+  border-bottom: 1px solid rgba(0,0,0,.2);
+  background: #fafafa;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.hwtbs-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+}
+
+.hwtbs-stat-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.hwtbs-stat-percent {
+  flex: 0 0 auto;
+  font-size: 8px;
+}
+
+.hwtbs-line:nth-child(1),
+#hwtbs-roll-panel .hwtbs-roll-speed {
+  background: rgba(230,208,90,.55);
+}
+
+.hwtbs-line:nth-child(2),
+#hwtbs-roll-panel .hwtbs-roll-damage {
+  background: rgba(245,166,66,.55);
+}
+
+.hwtbs-line:nth-child(3),
+#hwtbs-roll-panel .hwtbs-roll-defense {
+  background: rgba(130,245,130,.55);
+}
+
+#hwtbs-roll-panel .hwtbs-roll-line {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  line-height: 17px;
+  text-align: center;
+}
+
+.hwtbs-roll-min,
+.hwtbs-roll-max {
+  text-align: center;
+}
+
+.hwtbs-roll-separator {
+  padding: 0 .45em;
+  color: #888;
+  text-align: center;
+}
+
+#hwtbs-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  padding: 3px 7px;
+  box-sizing: border-box;
+  border: 1px solid #2f8fbc;
+  outline: 1px solid #000;
+  border-radius: 2px;
+  background: #252525;
+  color: #f7f7f7;
+  font-family: Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
+  box-shadow: 1px 1px 3px 1px rgba(0,0,0,.5);
+  transition: opacity .4s linear;
+}
+
+#hwtbs-tooltip::before,
+#hwtbs-tooltip::after {
+  content: '';
+  position: absolute;
+  left: var(--hwtbs-arrow-x);
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+#hwtbs-tooltip.hwtbs-tip-below::before {
+  top: -7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid #000;
+}
+
+#hwtbs-tooltip.hwtbs-tip-below::after {
+  top: -5px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #252525;
+}`;
       document.head.appendChild(style);
     }
 
