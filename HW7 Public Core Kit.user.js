@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.4
+// @version      2.13
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -417,12 +417,36 @@ function hw7RunDocumentEndModules() {
     const K_LAST_FP = 'jbgl_last_fp_v1';
     const K_T_STATE = 'jbgl_t_state_v1';
     const K_COLLAPSED_HOURS = 'jbgl_collapsed_hours_v1';
-
+    const K_PANEL_MODE = 'jbgl_panel_mode_v1';
+    const K_PANEL_ANCHOR = 'jbgl_panel_anchor_v1';
 
     const MAX_ROWS = 5000;
     const PANEL_WIDTH = 355;
     const JBET_ROW_GRID = '22% 13% 13% 13% 13% 10% 10% 6%';
+
+    const JBET_PANEL_MODES = Object.freeze({
+      FIXED: 'fixed',
+      CONTENT_END: 'content-end'
+    });
+
+    const JBET_PANEL_ANCHORS = Object.freeze([
+      'top-left',
+      'top-right',
+      'middle-left',
+      'middle-right',
+      'bottom-left',
+      'bottom-right',
+      'open-area'
+    ]);
+
+    const JBET_PANEL_GUTTER = Object.freeze({
+      topChrome: 5,
+      side: 15,
+      bottom: 15
+    });
+
     let jungleImportOpen = false;
+    let jbetPlacementResizeBound = false;
 
     const href = String(location.href || '');
     const isJungle = /[?&]cmd=more_jungle(?:[&#]|$|&)/i.test(href);
@@ -907,9 +931,44 @@ function hw7RunDocumentEndModules() {
       headerWrap.style.color = '#000000';
       headerWrap.style.fontWeight = 'bold';
       const headerRow = makeTextRow('Timestamp', null, true, 'Qty');
+
+      const settingsCell = headerRow.children[7];
+      if (settingsCell) {
+        const settingsBtn = document.createElement('button');
+        settingsBtn.type = 'button';
+        settingsBtn.textContent = '⚙';
+        settingsBtn.title = 'Jungle panel placement';
+        settingsBtn.setAttribute('aria-label', 'Jungle panel placement');
+        settingsBtn.style.cssText = [
+          'display:inline-flex',
+          'align-items:center',
+          'justify-content:center',
+          'width:16px',
+          'height:16px',
+          'margin:auto',
+          'padding:0',
+          'border:1px solid #888',
+          'border-radius:3px',
+          'background:#ddd',
+          'color:#222',
+          'font-size:11px',
+          'line-height:14px',
+          'cursor:pointer'
+        ].join(';');
+
+        settingsBtn.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          openJbetPlacementDialog(inlineWrap);
+        });
+
+        settingsCell.appendChild(settingsBtn);
+      }
+
       headerWrap.appendChild(headerRow);
 
       const body = document.createElement('div');
+      body.className = 'jbgl-scroll-body';
       body.style.boxSizing = 'border-box';
       body.style.maxHeight = '118px';
       body.style.overflowY = 'auto';
@@ -1016,9 +1075,122 @@ function hw7RunDocumentEndModules() {
       box.append(headerWrap, body);
       inlineWrap.append(box, footer, controls);
 
-      // Keep JBET directly beneath the native Technicolor Jungle interface.
-      // Appending to .content-area can place the panel below a full-height
-      // native layout block, effectively pushing it out of the viewport.
+      applyJbetPanelPlacement(inlineWrap);
+      bindJbetPlacementResize();
+    }
+
+    function loadJbetPanelPlacement() {
+      const rawMode = String(GM_getValue(K_PANEL_MODE, JBET_PANEL_MODES.CONTENT_END) || '');
+      const rawAnchor = String(GM_getValue(K_PANEL_ANCHOR, 'top-left') || '');
+
+      return {
+        mode: rawMode === JBET_PANEL_MODES.FIXED
+          ? JBET_PANEL_MODES.FIXED
+          : JBET_PANEL_MODES.CONTENT_END,
+        anchor: JBET_PANEL_ANCHORS.includes(rawAnchor)
+          ? rawAnchor
+          : 'top-left'
+      };
+    }
+
+    function saveJbetPanelPlacement(next) {
+      const current = loadJbetPanelPlacement();
+
+      const mode = next && next.mode === JBET_PANEL_MODES.FIXED
+        ? JBET_PANEL_MODES.FIXED
+        : next && next.mode === JBET_PANEL_MODES.CONTENT_END
+          ? JBET_PANEL_MODES.CONTENT_END
+          : current.mode;
+
+      const anchor = next && JBET_PANEL_ANCHORS.includes(next.anchor)
+        ? next.anchor
+        : current.anchor;
+
+      GM_setValue(K_PANEL_MODE, mode);
+      GM_setValue(K_PANEL_ANCHOR, anchor);
+
+      return { mode, anchor };
+    }
+
+    function measureJbetPlacementBounds() {
+      const viewportWidth = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+      const viewportHeight = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+
+      const content =
+        document.querySelector('.content-area') ||
+        document.getElementById('main');
+
+      const contentRect = content && typeof content.getBoundingClientRect === 'function'
+        ? content.getBoundingClientRect()
+        : null;
+
+      const contentTop = contentRect
+        ? Math.max(0, Math.round(contentRect.top))
+        : 0;
+
+      const contentRight = contentRect
+        ? Math.round(contentRect.right)
+        : 0;
+
+      const top = contentTop + JBET_PANEL_GUTTER.topChrome;
+      const left = Math.max(
+        JBET_PANEL_GUTTER.side,
+        Math.min(
+          viewportWidth - JBET_PANEL_GUTTER.side,
+          contentRight + JBET_PANEL_GUTTER.side
+        )
+      );
+      const right = Math.max(left, viewportWidth - JBET_PANEL_GUTTER.side);
+      const bottom = Math.max(top, viewportHeight - JBET_PANEL_GUTTER.bottom);
+
+      return {
+        viewportWidth,
+        viewportHeight,
+        contentTop,
+        contentRight,
+        top,
+        left,
+        right,
+        bottom,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top)
+      };
+    }
+
+    function resetJbetPlacementStyles(panel) {
+      for (const prop of [
+        'position', 'top', 'right', 'bottom', 'left',
+        'width', 'maxWidth', 'height', 'maxHeight',
+        'margin', 'zIndex', 'display', 'flexDirection', 'minHeight'
+      ]) {
+        panel.style[prop] = '';
+      }
+    }
+
+    function placeJbetContentEnd(panel, host) {
+      resetJbetPlacementStyles(panel);
+      panel.style.position = 'static';
+      panel.style.width = '100%';
+      panel.style.maxWidth = '100%';
+      panel.style.height = 'auto';
+      panel.style.maxHeight = 'none';
+      panel.style.margin = '8px 0 0';
+      panel.style.zIndex = 'auto';
+
+      const box = panel.querySelector('#jbgl-box');
+      const scrollBody = panel.querySelector('.jbgl-scroll-body');
+
+      if (box) {
+        box.style.flex = '';
+        box.style.minHeight = '';
+      }
+
+      if (scrollBody) {
+        scrollBody.style.flex = '';
+        scrollBody.style.minHeight = '';
+        scrollBody.style.maxHeight = '118px';
+      }
+
       const leaveJungleLink = Array.from(host.querySelectorAll('a')).find(link =>
         /leave technicolor jungle/i.test(link.textContent || '')
       );
@@ -1026,21 +1198,344 @@ function hw7RunDocumentEndModules() {
       if (leaveJungleLink) {
         let jungleBlock = leaveJungleLink;
 
-        // Promote the link to the top-level child of the selected host so the
-        // tracker is inserted after the complete native Jungle block, not
-        // inside one of its nested table cells.
         while (jungleBlock.parentElement && jungleBlock.parentElement !== host) {
           jungleBlock = jungleBlock.parentElement;
         }
 
         if (jungleBlock.parentElement === host) {
-          jungleBlock.insertAdjacentElement('afterend', inlineWrap);
-        } else {
-          host.appendChild(inlineWrap);
+          jungleBlock.insertAdjacentElement('afterend', panel);
+          return;
         }
-      } else {
-        host.appendChild(inlineWrap);
       }
+
+      host.appendChild(panel);
+    }
+
+    function applyJbetPanelPlacement(panel, suppliedSettings = null) {
+      if (!panel) return;
+
+      const settings = suppliedSettings || loadJbetPanelPlacement();
+      const bounds = measureJbetPlacementBounds();
+      const host =
+        document.querySelector('.content-area') ||
+        document.getElementById('main') ||
+        document.body;
+
+      if (settings.mode === JBET_PANEL_MODES.CONTENT_END) {
+        placeJbetContentEnd(panel, host);
+        return bounds;
+      }
+
+      resetJbetPlacementStyles(panel);
+
+      if (panel.parentElement !== document.body) {
+        document.body.appendChild(panel);
+      }
+
+      panel.style.position = 'fixed';
+      panel.style.zIndex = '99998';
+      panel.style.margin = '0';
+      panel.style.display = 'flex';
+      panel.style.flexDirection = 'column';
+      panel.style.minHeight = '0';
+
+      const box = panel.querySelector('#jbgl-box');
+      const scrollBody = panel.querySelector('.jbgl-scroll-body');
+
+      if (box) {
+        box.style.flex = '1 1 auto';
+        box.style.minHeight = '0';
+      }
+
+      // The 118px scroll cap belongs only to Content End. A fixed JBET panel
+      // uses the full vertical region promised by its selected anchor.
+      if (scrollBody) {
+        scrollBody.style.flex = '1 1 auto';
+        scrollBody.style.minHeight = '0';
+        scrollBody.style.maxHeight = 'none';
+      }
+
+      const availableWidth = Math.max(120, bounds.width);
+      const fixedWidth = Math.min(PANEL_WIDTH, availableWidth);
+      const sixtyPercent = Math.max(120, Math.floor(bounds.height * 0.60));
+
+      const leftAligned = /-left$/.test(settings.anchor);
+      const rightAligned = /-right$/.test(settings.anchor);
+
+      if (settings.anchor === 'open-area') {
+        panel.style.left = `${bounds.left}px`;
+        panel.style.right = `${Math.max(0, bounds.viewportWidth - bounds.right)}px`;
+        panel.style.top = `${bounds.top}px`;
+        panel.style.bottom = `${Math.max(0, bounds.viewportHeight - bounds.bottom)}px`;
+        panel.style.width = 'auto';
+        panel.style.maxWidth = 'none';
+        panel.style.height = 'auto';
+        panel.style.maxHeight = 'none';
+        return bounds;
+      }
+
+      panel.style.width = `${fixedWidth}px`;
+      panel.style.maxWidth = `${availableWidth}px`;
+
+      if (leftAligned) {
+        panel.style.left = `${bounds.left}px`;
+      } else if (rightAligned) {
+        panel.style.right = `${Math.max(0, bounds.viewportWidth - bounds.right)}px`;
+      }
+
+      if (settings.anchor.startsWith('top-')) {
+        panel.style.top = `${bounds.top}px`;
+        panel.style.height = `${sixtyPercent}px`;
+        panel.style.maxHeight = 'none';
+      } else if (settings.anchor.startsWith('bottom-')) {
+        panel.style.bottom = `${Math.max(0, bounds.viewportHeight - bounds.bottom)}px`;
+        panel.style.height = `${sixtyPercent}px`;
+        panel.style.maxHeight = 'none';
+      } else {
+        panel.style.top = `${bounds.top}px`;
+        panel.style.bottom = `${Math.max(0, bounds.viewportHeight - bounds.bottom)}px`;
+        panel.style.height = 'auto';
+        panel.style.maxHeight = 'none';
+      }
+
+      return bounds;
+    }
+
+    function bindJbetPlacementResize() {
+      if (jbetPlacementResizeBound) return;
+      jbetPlacementResizeBound = true;
+
+      window.addEventListener('resize', () => {
+        const panel = document.getElementById('jbgl-inline-wrap');
+        if (!panel) return;
+        applyJbetPanelPlacement(panel);
+
+        const dialog = document.getElementById('jbet-placement-dialog');
+        if (dialog) updateJbetPlacementDialogPreview(dialog);
+      }, { passive: true });
+    }
+
+    function openJbetPlacementDialog(panel) {
+      document.getElementById('jbet-placement-overlay')?.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'jbet-placement-overlay';
+      overlay.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'z-index:2147483646',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'background:rgba(0,0,0,.48)',
+        'font-family:Verdana,Arial,sans-serif'
+      ].join(';');
+
+      const dialog = document.createElement('div');
+      dialog.id = 'jbet-placement-dialog';
+      dialog.style.cssText = [
+        'width:min(560px,calc(100vw - 30px))',
+        'box-sizing:border-box',
+        'padding:10px',
+        'border:1px solid #666',
+        'border-radius:5px',
+        'background:#efefef',
+        'color:#111',
+        'box-shadow:0 3px 18px rgba(0,0,0,.55)'
+      ].join(';');
+
+      const heading = document.createElement('div');
+      heading.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:bold;font-size:13px;';
+
+      const title = document.createElement('span');
+      title.textContent = 'Jungle Panel Placement';
+
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = '×';
+      close.title = 'Close';
+      close.style.cssText = 'width:24px;height:22px;padding:0;border:1px solid #888;border-radius:3px;background:#ddd;cursor:pointer;font-size:16px;line-height:18px;';
+      close.addEventListener('click', () => overlay.remove());
+
+      heading.append(title, close);
+
+      const modeRow = document.createElement('div');
+      modeRow.style.cssText = 'display:flex;gap:18px;align-items:center;justify-content:center;margin:4px 0 9px;font-size:11px;font-weight:bold;';
+
+      const settings = loadJbetPanelPlacement();
+
+      const contentLabel = document.createElement('label');
+      const contentRadio = document.createElement('input');
+      contentRadio.type = 'radio';
+      contentRadio.name = 'jbet-panel-mode';
+      contentRadio.value = JBET_PANEL_MODES.CONTENT_END;
+      contentRadio.checked = settings.mode === JBET_PANEL_MODES.CONTENT_END;
+      contentLabel.append(contentRadio, document.createTextNode(' Content End'));
+
+      const fixedLabel = document.createElement('label');
+      const fixedRadio = document.createElement('input');
+      fixedRadio.type = 'radio';
+      fixedRadio.name = 'jbet-panel-mode';
+      fixedRadio.value = JBET_PANEL_MODES.FIXED;
+      fixedRadio.checked = settings.mode === JBET_PANEL_MODES.FIXED;
+      fixedLabel.append(fixedRadio, document.createTextNode(' Fixed Place'));
+
+      modeRow.append(contentLabel, fixedLabel);
+
+      const preview = document.createElement('div');
+      preview.className = 'jbet-placement-preview';
+      preview.style.cssText = [
+        'position:relative',
+        'height:245px',
+        'overflow:hidden',
+        'border:2px solid #222',
+        'border-radius:3px',
+        'background:#cfcfcf'
+      ].join(';');
+
+      const topbar = document.createElement('div');
+      topbar.style.cssText = 'position:absolute;left:0;right:0;top:0;height:36px;background:#777;border-bottom:2px solid #333;text-align:center;font-size:10px;font-weight:bold;line-height:36px;';
+      topbar.textContent = 'TOPBAR / TOPBAR MENU';
+
+      const leftPanel = document.createElement('div');
+      leftPanel.style.cssText = 'position:absolute;left:0;top:38px;bottom:0;width:18%;background:#e3e3e3;border-right:1px solid #888;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;writing-mode:vertical-rl;transform:rotate(180deg);';
+      leftPanel.textContent = 'LEFT PANEL';
+
+      const contentArea = document.createElement('div');
+      contentArea.style.cssText = 'position:absolute;left:18%;top:38px;bottom:0;width:40%;background:#f7f7f7;border-right:2px solid #444;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;';
+      contentArea.textContent = 'CONTENT AREA';
+
+      const safeArea = document.createElement('div');
+      safeArea.className = 'jbet-safe-area';
+      safeArea.style.cssText = 'position:absolute;left:58%;right:0;top:38px;bottom:0;background:#ddd;';
+
+      const shade = document.createElement('div');
+      shade.className = 'jbet-placement-shade';
+      shade.style.cssText = 'position:absolute;border:1px dashed #2f8fbc;background:rgba(47,143,188,.18);pointer-events:none;';
+
+      const points = {
+        'top-left': [8, 13],
+        'top-right': [92, 13],
+        'middle-left': [8, 50],
+        'middle-right': [92, 50],
+        'bottom-left': [8, 87],
+        'bottom-right': [92, 87],
+        'open-area': [50, 50]
+      };
+
+      for (const [anchorName, [x, y]] of Object.entries(points)) {
+        const label = document.createElement('label');
+        label.style.cssText = `position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;`;
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'jbet-panel-anchor';
+        radio.value = anchorName;
+        radio.checked = settings.anchor === anchorName;
+        radio.style.cursor = 'pointer';
+
+        radio.addEventListener('change', () => {
+          const next = saveJbetPanelPlacement({
+            mode: JBET_PANEL_MODES.FIXED,
+            anchor: anchorName
+          });
+          fixedRadio.checked = true;
+          contentRadio.checked = false;
+          applyJbetPanelPlacement(panel, next);
+          updateJbetPlacementDialogPreview(dialog);
+        });
+
+        label.appendChild(radio);
+        safeArea.appendChild(label);
+      }
+
+      safeArea.appendChild(shade);
+      preview.append(topbar, leftPanel, contentArea, safeArea);
+
+      const detail = document.createElement('div');
+      detail.className = 'jbet-placement-detail';
+      detail.style.cssText = 'margin-top:7px;padding:6px 7px;border:1px solid #bbb;border-radius:3px;background:#fff;font:10px/1.35 Consolas,monospace;white-space:normal;';
+
+      const onModeChange = () => {
+        const mode = contentRadio.checked
+          ? JBET_PANEL_MODES.CONTENT_END
+          : JBET_PANEL_MODES.FIXED;
+
+        const next = saveJbetPanelPlacement({ mode });
+        applyJbetPanelPlacement(panel, next);
+        updateJbetPlacementDialogPreview(dialog);
+      };
+
+      contentRadio.addEventListener('change', onModeChange);
+      fixedRadio.addEventListener('change', onModeChange);
+
+      dialog.append(heading, modeRow, preview, detail);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay) overlay.remove();
+      });
+
+      updateJbetPlacementDialogPreview(dialog);
+    }
+
+    function updateJbetPlacementDialogPreview(dialog) {
+      if (!dialog) return;
+
+      const settings = loadJbetPanelPlacement();
+      const preview = dialog.querySelector('.jbet-placement-preview');
+      const safeArea = dialog.querySelector('.jbet-safe-area');
+      const shade = dialog.querySelector('.jbet-placement-shade');
+      const detail = dialog.querySelector('.jbet-placement-detail');
+      const anchorInputs = Array.from(dialog.querySelectorAll('input[name="jbet-panel-anchor"]'));
+
+      const enabled = settings.mode === JBET_PANEL_MODES.FIXED;
+
+      for (const input of anchorInputs) {
+        input.disabled = !enabled;
+      }
+
+      if (safeArea) safeArea.style.opacity = enabled ? '1' : '.45';
+      if (shade) shade.style.display = enabled ? 'block' : 'none';
+
+      if (shade && enabled) {
+        const styles = {
+          'top-left':     ['6%', '8%', '42%', '52%'],
+          'top-right':    ['52%', '8%', '42%', '52%'],
+          'middle-left':  ['6%', '5%', '42%', '90%'],
+          'middle-right': ['52%', '5%', '42%', '90%'],
+          'bottom-left':  ['6%', '40%', '42%', '52%'],
+          'bottom-right': ['52%', '40%', '42%', '52%'],
+          'open-area':    ['5%', '5%', '90%', '90%']
+        };
+
+        const [left, top, width, height] = styles[settings.anchor] || styles['top-left'];
+        shade.style.left = left;
+        shade.style.top = top;
+        shade.style.width = width;
+        shade.style.height = height;
+      }
+
+      if (!detail) return;
+
+      if (!enabled) {
+        detail.textContent =
+          'Content End: Panel is placed after the last UI item in the Content Area.';
+        return;
+      }
+
+      const descriptions = {
+        'top-left': 'Top-Left: Close to the Content Area, fills 60% of the available height.',
+        'top-right': 'Top-Right: Close to the right viewport edge, fills 60% of the available height.',
+        'middle-left': 'Middle-Left: Close to the Content Area, fills the available height.',
+        'middle-right': 'Middle-Right: Close to the right viewport edge, fills the available height.',
+        'bottom-left': 'Bottom-Left: Close to the Content Area, fills 60% of the available height upward.',
+        'bottom-right': 'Bottom-Right: Close to the right viewport edge, fills 60% of the available height upward.',
+        'open-area': 'Open Area: Fills the available space between the Content Area and viewport bounds.'
+      };
+
+      detail.textContent = descriptions[settings.anchor] || '';
     }
 
     function makeJungleImportButton(rows, state) {
@@ -1619,9 +2114,35 @@ function hw7RunDocumentEndModules() {
       const K_BL_COLLAPSED = `mtt_collapsed_bl_schema_${STORAGE_SCHEMA}`;
       const K_MINE_DAY_LOG = `mtt_mine_day_log_schema_${STORAGE_SCHEMA}`;
       const K_TOPBAR_LAST_TRADE = `mtt_topbar_last_trade_bridge_v1`;
+      const K_PANEL_MODE = 'mtt_panel_mode_v1';
+      const K_PANEL_ANCHOR = 'mtt_panel_anchor_v1';
 
       const MAX_ROWS = 4650;
       const PANEL_WIDTH = 410;
+
+      const MTT_PANEL_MODES = Object.freeze({
+          FIXED: 'fixed',
+          CONTENT_END: 'content-end'
+      });
+
+      const MTT_PANEL_ANCHORS = Object.freeze([
+          'top-left',
+          'top-right',
+          'middle-left',
+          'middle-right',
+          'bottom-left',
+          'bottom-right',
+          'open-area'
+      ]);
+
+      const MTT_PANEL_GUTTER = Object.freeze({
+          topChrome: 5,
+          side: 15,
+          bottom: 15,
+          legendOverhang: 8
+      });
+
+      let mttPlacementResizeBound = false;
 
       const ORE_IDS = {
           228: 'Ch',
@@ -4105,10 +4626,56 @@ function hw7RunDocumentEndModules() {
 
           const style = document.createElement('style');
           style.id = 'mtt-layout-style';
-          style.textContent = `body div.content-wrap div.content-area {
-          margin: 0 auto 0 15px;
-          min-width: 745px !important;
-          max-width: 745px !important;}`;
+          style.textContent = `
+body div.content-wrap div.content-area {
+  margin: 0 auto 0 15px;
+  min-width: 745px !important;
+  max-width: 745px !important;
+}
+
+/*
+ * Content-End and Open-Area placements can be dramatically wider than the
+ * original 410px fixed HUD.  Keep the compact fixed-panel typography, but
+ * let ledger data consume the horizontal room instead of remaining packed
+ * against the left edge.
+ */
+#mtt-panel.mtt-wide-layout .mtt-trade-day-header,
+#mtt-panel.mtt-wide-layout .mtt-trade-group,
+#mtt-panel.mtt-wide-layout .mtt-trade-source-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#mtt-panel.mtt-wide-layout .mtt-trade-day-header {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+#mtt-panel.mtt-wide-layout .mtt-trade-group {
+  padding: 0 18px;
+  min-height: 18px;
+}
+
+#mtt-panel.mtt-wide-layout .mtt-trade-source-line {
+  padding-right: 18px;
+}
+
+#mtt-panel.mtt-wide-layout .mtt-trade-group > span,
+#mtt-panel.mtt-wide-layout .mtt-trade-source-line > span,
+#mtt-panel.mtt-wide-layout .mtt-trade-day-header > span {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Preserve the original dense left-packed presentation in compact fixed modes. */
+#mtt-panel:not(.mtt-wide-layout) .mtt-trade-day-header,
+#mtt-panel:not(.mtt-wide-layout) .mtt-trade-group,
+#mtt-panel:not(.mtt-wide-layout) .mtt-trade-source-line {
+  display: block;
+}`;
           document.head.appendChild(style);
       }
 
@@ -4254,12 +4821,6 @@ function hw7RunDocumentEndModules() {
               panel.id = 'mtt-panel';
 
               panel.style.cssText = [
-                  'position:fixed',
-                  'top:106px',
-                  'left:975px',
-                  'bottom:16px',
-                  `width:${PANEL_WIDTH}px`,
-                  'height:auto',
                   'box-sizing:border-box',
                   `background:${COLORS.panelBg}`,
                   `border:1px solid ${COLORS.border}`,
@@ -4270,7 +4831,6 @@ function hw7RunDocumentEndModules() {
                   'font-size:13px',
                   'line-height:1.05',
                   'padding:0 4px',
-                  'margin:0',
                   'white-space:pre',
                   'overflow:auto',
                   'z-index:99998',
@@ -4278,24 +4838,61 @@ function hw7RunDocumentEndModules() {
               ].join(';');
 
               const legend = document.createElement('legend');
-              legend.textContent = `Mines Telemetry v${SCRIPT_VERSION}`;
               legend.style.color = '#ebebeb';
               legend.style.padding = '0 5px';
               legend.style.margin = 'auto';
-              legend.style.fontSize = "14px";
+              legend.style.fontSize = '14px';
               legend.style.position = 'relative';
               legend.style.bottom = '8px';
               legend.style.backgroundColor = '#000000';
               legend.style.borderRadius = '6px 6px 0 0';
               legend.style.border = '1px solid #2f8fbc';
-              legend.style.borderBottom = `0`;
-              panel.appendChild(legend);
+              legend.style.borderBottom = '0';
+              legend.style.display = 'inline-flex';
+              legend.style.alignItems = 'center';
+              legend.style.gap = '5px';
 
+              const title = document.createElement('span');
+              title.textContent = `Mines Telemetry v${SCRIPT_VERSION}`;
+
+              const settingsBtn = document.createElement('button');
+              settingsBtn.type = 'button';
+              settingsBtn.textContent = '⚙';
+              settingsBtn.title = 'Mines panel placement';
+              settingsBtn.setAttribute('aria-label', 'Mines panel placement');
+              settingsBtn.style.cssText = [
+                  'display:inline-flex',
+                  'align-items:center',
+                  'justify-content:center',
+                  'width:16px',
+                  'height:16px',
+                  'padding:0',
+                  'border:1px solid #555',
+                  'border-radius:3px',
+                  'background:#1d1d1d',
+                  'color:#ddd',
+                  'font-size:11px',
+                  'line-height:14px',
+                  'cursor:pointer'
+              ].join(';');
+
+              settingsBtn.addEventListener('click', event => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  openMttPlacementDialog(panel);
+              });
+
+              legend.append(title, settingsBtn);
+              panel.appendChild(legend);
               document.body.appendChild(panel);
           }
 
+          applyMttPanelPlacement(panel);
+          bindMttPlacementResize();
+
           const legend = panel.querySelector('legend');
           const body = document.createElement('div');
+          body.className = 'mtt-panel-body';
 
           body.style.display = 'flex';
           body.style.flexDirection = 'column';
@@ -4316,9 +4913,568 @@ function hw7RunDocumentEndModules() {
 
           body.appendChild(line(''));
           body.appendChild(renderButtons(s, rows));
-          body.appendChild(renderPreviewBlock(s));
+          body.appendChild(renderStockBlock(s.stock));
 
           panel.replaceChildren(legend, body);
+          updateMttLedgerGeometry(panel, loadMttPanelPlacement(), measureMttPlacementBounds());
+      }
+
+      function loadMttPanelPlacement() {
+          const rawMode = String(GM_getValue(K_PANEL_MODE, MTT_PANEL_MODES.FIXED) || '');
+          const rawAnchor = String(GM_getValue(K_PANEL_ANCHOR, 'top-left') || '');
+
+          return {
+              mode: rawMode === MTT_PANEL_MODES.CONTENT_END
+                  ? MTT_PANEL_MODES.CONTENT_END
+                  : MTT_PANEL_MODES.FIXED,
+              anchor: MTT_PANEL_ANCHORS.includes(rawAnchor)
+                  ? rawAnchor
+                  : 'top-left'
+          };
+      }
+
+      function saveMttPanelPlacement(next) {
+          const current = loadMttPanelPlacement();
+
+          const mode = next && next.mode === MTT_PANEL_MODES.CONTENT_END
+              ? MTT_PANEL_MODES.CONTENT_END
+              : next && next.mode === MTT_PANEL_MODES.FIXED
+                  ? MTT_PANEL_MODES.FIXED
+                  : current.mode;
+
+          const anchor = next && MTT_PANEL_ANCHORS.includes(next.anchor)
+              ? next.anchor
+              : current.anchor;
+
+          GM_setValue(K_PANEL_MODE, mode);
+          GM_setValue(K_PANEL_ANCHOR, anchor);
+
+          return { mode, anchor };
+      }
+
+      function measureMttPlacementBounds() {
+          const viewportWidth = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+          const viewportHeight = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+
+          const content =
+              document.querySelector('.content-area') ||
+              document.getElementById('main');
+
+          const contentRect = content && typeof content.getBoundingClientRect === 'function'
+              ? content.getBoundingClientRect()
+              : null;
+
+          const chromeSelectors = [
+              '.topbar',
+              '#topbar',
+              '.top-menu',
+              '#top-menu',
+              '.topmenu',
+              '#topmenu',
+              '[class*="topbar-menu"]',
+              '[class*="topmenu"]',
+              '[id*="topbar-menu"]',
+              '[id*="topmenu"]'
+          ];
+
+          const chromeNodes = new Set();
+
+          for (const selector of chromeSelectors) {
+              try {
+                  for (const node of document.querySelectorAll(selector)) {
+                      chromeNodes.add(node);
+                  }
+              } catch {
+                  // Ignore unsupported selector variants in older browsers.
+              }
+          }
+
+          let chromeBottom = 0;
+
+          for (const node of chromeNodes) {
+              if (!(node instanceof Element)) continue;
+
+              const style = getComputedStyle(node);
+              if (style.display === 'none' || style.visibility === 'hidden') continue;
+
+              const rect = node.getBoundingClientRect();
+              if (rect.width <= 0 || rect.height <= 0) continue;
+              if (rect.bottom <= 0 || rect.top >= viewportHeight) continue;
+
+              // Only treat geometry living at the top of the viewport/page as
+              // native top chrome. This prevents unrelated "topmenu"-named
+              // descendants lower in content from expanding the bound.
+              if (rect.top <= Math.max(12, rect.height * 0.35)) {
+                  chromeBottom = Math.max(chromeBottom, rect.bottom);
+              }
+          }
+
+          // The content area's top edge is the most reliable live boundary for
+          // the native top chrome because it already reflects whether the optional
+          // top menu is present, the active legacy/Future layout, and browser zoom.
+          // Keep selector-based chrome detection as a fallback/cross-check, but never
+          // allow it to place the panel above the content area's rendered top edge.
+          const contentTop = contentRect
+              ? Math.max(0, Math.round(contentRect.top))
+              : 0;
+
+          const nativeTopBottom = Math.max(
+              0,
+              Math.round(chromeBottom),
+              contentTop
+          );
+
+          // The fieldset legend is intentionally raised 8px above the fieldset border.
+          // Offset the fieldset itself by that amount so the *visible legend* still
+          // begins at the requested 5px gutter below native top geometry.
+          const top = nativeTopBottom +
+              MTT_PANEL_GUTTER.topChrome +
+              MTT_PANEL_GUTTER.legendOverhang;
+
+          const contentRight = contentRect
+              ? Math.round(contentRect.right)
+              : 0;
+
+          const contentHeight = contentRect
+              ? Math.max(0, Math.round(contentRect.height))
+              : 0;
+
+          const left = Math.max(
+              MTT_PANEL_GUTTER.side,
+              Math.min(
+                  viewportWidth - MTT_PANEL_GUTTER.side,
+                  contentRight + MTT_PANEL_GUTTER.side
+              )
+          );
+
+          const right = Math.max(
+              left,
+              viewportWidth - MTT_PANEL_GUTTER.side
+          );
+
+          const bottom = Math.max(
+              top,
+              viewportHeight - MTT_PANEL_GUTTER.bottom
+          );
+
+          return {
+              viewportWidth,
+              viewportHeight,
+              chromeBottom: nativeTopBottom,
+              contentTop,
+              contentRight,
+              contentHeight,
+              top,
+              left,
+              right,
+              bottom,
+              width: Math.max(0, right - left),
+              height: Math.max(0, bottom - top)
+          };
+      }
+
+      function resetMttPanelPlacementStyles(panel) {
+          const props = [
+              'position', 'top', 'right', 'bottom', 'left',
+              'width', 'maxWidth', 'height', 'maxHeight',
+              'margin', 'zIndex'
+          ];
+
+          for (const prop of props) {
+              panel.style[prop] = '';
+          }
+      }
+
+      function applyMttPanelPlacement(panel, suppliedSettings = null) {
+          if (!panel) return;
+
+          const settings = suppliedSettings || loadMttPanelPlacement();
+          const bounds = measureMttPlacementBounds();
+
+          panel.classList.toggle(
+              'mtt-wide-layout',
+              settings.mode === MTT_PANEL_MODES.CONTENT_END ||
+              settings.anchor === 'open-area'
+          );
+          panel.classList.toggle(
+              'mtt-content-end',
+              settings.mode === MTT_PANEL_MODES.CONTENT_END
+          );
+          panel.classList.toggle(
+              'mtt-fixed-layout',
+              settings.mode === MTT_PANEL_MODES.FIXED
+          );
+
+          resetMttPanelPlacementStyles(panel);
+
+          if (settings.mode === MTT_PANEL_MODES.CONTENT_END) {
+              panel.style.position = 'static';
+              panel.style.width = '100%';
+              panel.style.maxWidth = '100%';
+              panel.style.height = 'auto';
+              panel.style.maxHeight = 'none';
+              panel.style.margin = '8px 0 0';
+              panel.style.zIndex = 'auto';
+
+              const host =
+                  document.querySelector('.content-area') ||
+                  document.getElementById('main') ||
+                  document.body;
+
+              if (host && panel.parentElement !== host) {
+                  host.appendChild(panel);
+              } else if (host && panel !== host.lastElementChild) {
+                  host.appendChild(panel);
+              }
+
+              updateMttLedgerGeometry(panel, settings, bounds);
+              return bounds;
+          }
+
+          if (panel.parentElement !== document.body) {
+              document.body.appendChild(panel);
+          }
+
+          panel.style.position = 'fixed';
+          panel.style.margin = '0';
+          panel.style.zIndex = '99998';
+          panel.style.display = 'flex';
+          panel.style.flexDirection = 'column';
+          panel.style.minHeight = '0';
+
+          const availableWidth = Math.max(120, bounds.width);
+          const fixedWidth = Math.min(PANEL_WIDTH, availableWidth);
+          const sixtyPercent = Math.max(120, Math.floor(bounds.height * 0.60));
+
+          const leftAligned = /-left$/.test(settings.anchor);
+          const rightAligned = /-right$/.test(settings.anchor);
+
+          if (settings.anchor === 'open-area') {
+              panel.style.left = `${bounds.left}px`;
+              panel.style.right = `${Math.max(0, bounds.viewportWidth - bounds.right)}px`;
+              panel.style.top = `${bounds.top}px`;
+              panel.style.bottom = `${Math.max(0, bounds.viewportHeight - bounds.bottom)}px`;
+              panel.style.width = 'auto';
+              panel.style.maxWidth = 'none';
+              panel.style.height = 'auto';
+              panel.style.maxHeight = 'none';
+              updateMttLedgerGeometry(panel, settings, bounds);
+              return bounds;
+          }
+
+          panel.style.width = `${fixedWidth}px`;
+          panel.style.maxWidth = `${availableWidth}px`;
+
+          if (leftAligned) {
+              panel.style.left = `${bounds.left}px`;
+          } else if (rightAligned) {
+              panel.style.right = `${Math.max(0, bounds.viewportWidth - bounds.right)}px`;
+          }
+
+          if (settings.anchor.startsWith('top-')) {
+              panel.style.top = `${bounds.top}px`;
+              panel.style.height = `${sixtyPercent}px`;
+              panel.style.maxHeight = 'none';
+          } else if (settings.anchor.startsWith('bottom-')) {
+              panel.style.bottom = `${Math.max(0, bounds.viewportHeight - bounds.bottom)}px`;
+              panel.style.height = `${sixtyPercent}px`;
+              panel.style.maxHeight = 'none';
+          } else {
+              panel.style.top = `${bounds.top}px`;
+              panel.style.bottom = `${Math.max(0, bounds.viewportHeight - bounds.bottom)}px`;
+              panel.style.height = 'auto';
+              panel.style.maxHeight = 'none';
+          }
+
+          updateMttLedgerGeometry(panel, settings, bounds);
+          return bounds;
+      }
+
+      function updateMttLedgerGeometry(panel, suppliedSettings = null, suppliedBounds = null) {
+          if (!panel) return;
+
+          const settings = suppliedSettings || loadMttPanelPlacement();
+          const bounds = suppliedBounds || measureMttPlacementBounds();
+          const panelBody = panel.querySelector('.mtt-panel-body');
+          const ledger = panel.querySelector('.mtt-ledger-scroll-body');
+
+          if (panelBody) {
+              panelBody.style.minHeight = '0';
+          }
+
+          if (!ledger) return;
+
+          ledger.style.boxSizing = 'border-box';
+          ledger.style.overflowY = 'auto';
+          ledger.style.overflowX = 'hidden';
+          ledger.style.scrollbarWidth = 'thin';
+          ledger.style.minHeight = '0';
+
+          if (settings.mode === MTT_PANEL_MODES.CONTENT_END) {
+              // Keep the in-flow ledger useful without letting a long month of
+              // trade history dominate the native Mines page. Scale against
+              // the live Content Area, with conservative floor/ceiling bounds.
+              const referenceHeight = bounds.contentHeight > 0
+                  ? bounds.contentHeight
+                  : bounds.height;
+
+              const inlineMax = Math.max(
+                  180,
+                  Math.min(360, Math.floor(referenceHeight * 0.42))
+              );
+
+              ledger.style.flex = '0 1 auto';
+              ledger.style.maxHeight = `${inlineMax}px`;
+              return;
+          }
+
+          // Fixed layouts already have an explicit vertical region. Let the
+          // ledger consume whatever remains after the status/header controls
+          // and sticky footer instead of imposing a second arbitrary cap.
+          if (panelBody) {
+              panelBody.style.flex = '1 1 auto';
+          }
+
+          ledger.style.flex = '1 1 auto';
+          ledger.style.maxHeight = 'none';
+      }
+
+      function bindMttPlacementResize() {
+          if (mttPlacementResizeBound) return;
+          mttPlacementResizeBound = true;
+
+          window.addEventListener('resize', () => {
+              const panel = document.getElementById('mtt-panel');
+              if (!panel) return;
+              applyMttPanelPlacement(panel);
+
+              const dialog = document.getElementById('mtt-placement-dialog');
+              if (dialog) updateMttPlacementDialogPreview(dialog);
+          }, { passive: true });
+      }
+
+      function openMttPlacementDialog(panel) {
+          document.getElementById('mtt-placement-overlay')?.remove();
+
+          const overlay = document.createElement('div');
+          overlay.id = 'mtt-placement-overlay';
+          overlay.style.cssText = [
+              'position:fixed',
+              'inset:0',
+              'z-index:2147483646',
+              'display:flex',
+              'align-items:center',
+              'justify-content:center',
+              'background:rgba(0,0,0,.48)',
+              'font-family:Verdana,Arial,sans-serif'
+          ].join(';');
+
+          const dialog = document.createElement('div');
+          dialog.id = 'mtt-placement-dialog';
+          dialog.style.cssText = [
+              'width:min(560px,calc(100vw - 30px))',
+              'box-sizing:border-box',
+              'padding:10px',
+              'border:1px solid #666',
+              'border-radius:5px',
+              'background:#efefef',
+              'color:#111',
+              'box-shadow:0 3px 18px rgba(0,0,0,.55)'
+          ].join(';');
+
+          const heading = document.createElement('div');
+          heading.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:bold;font-size:13px;';
+
+          const title = document.createElement('span');
+          title.textContent = 'Mines Panel Placement';
+
+          const close = document.createElement('button');
+          close.type = 'button';
+          close.textContent = '×';
+          close.title = 'Close';
+          close.style.cssText = 'width:24px;height:22px;padding:0;border:1px solid #888;border-radius:3px;background:#ddd;cursor:pointer;font-size:16px;line-height:18px;';
+          close.addEventListener('click', () => overlay.remove());
+
+          heading.append(title, close);
+
+          const modeRow = document.createElement('div');
+          modeRow.style.cssText = 'display:flex;gap:18px;align-items:center;justify-content:center;margin:4px 0 9px;font-size:11px;font-weight:bold;';
+
+          const settings = loadMttPanelPlacement();
+
+          const contentLabel = document.createElement('label');
+          const contentRadio = document.createElement('input');
+          contentRadio.type = 'radio';
+          contentRadio.name = 'mtt-panel-mode';
+          contentRadio.value = MTT_PANEL_MODES.CONTENT_END;
+          contentRadio.checked = settings.mode === MTT_PANEL_MODES.CONTENT_END;
+          contentLabel.append(contentRadio, document.createTextNode(' Content End'));
+
+          const fixedLabel = document.createElement('label');
+          const fixedRadio = document.createElement('input');
+          fixedRadio.type = 'radio';
+          fixedRadio.name = 'mtt-panel-mode';
+          fixedRadio.value = MTT_PANEL_MODES.FIXED;
+          fixedRadio.checked = settings.mode === MTT_PANEL_MODES.FIXED;
+          fixedLabel.append(fixedRadio, document.createTextNode(' Fixed Place'));
+
+          modeRow.append(contentLabel, fixedLabel);
+
+          const preview = document.createElement('div');
+          preview.className = 'mtt-placement-preview';
+          preview.style.cssText = [
+              'position:relative',
+              'height:245px',
+              'overflow:hidden',
+              'border:2px solid #222',
+              'border-radius:3px',
+              'background:#cfcfcf'
+          ].join(';');
+
+          const topbar = document.createElement('div');
+          topbar.style.cssText = 'position:absolute;left:0;right:0;top:0;height:36px;background:#777;border-bottom:2px solid #333;text-align:center;font-size:10px;font-weight:bold;line-height:36px;';
+          topbar.textContent = 'TOPBAR / TOPBAR MENU';
+
+          const leftPanel = document.createElement('div');
+          leftPanel.style.cssText = 'position:absolute;left:0;top:38px;bottom:0;width:18%;background:#e3e3e3;border-right:1px solid #888;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;writing-mode:vertical-rl;transform:rotate(180deg);';
+          leftPanel.textContent = 'LEFT PANEL';
+
+          const contentArea = document.createElement('div');
+          contentArea.style.cssText = 'position:absolute;left:18%;top:38px;bottom:0;width:40%;background:#f7f7f7;border-right:2px solid #444;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;';
+          contentArea.textContent = 'CONTENT AREA';
+
+          const safeArea = document.createElement('div');
+          safeArea.style.cssText = 'position:absolute;left:58%;right:0;top:38px;bottom:0;background:#ddd;';
+
+          const shade = document.createElement('div');
+          shade.className = 'mtt-placement-shade';
+          shade.style.cssText = 'position:absolute;border:1px dashed #2f8fbc;background:rgba(47,143,188,.18);pointer-events:none;';
+
+          const points = {
+              'top-left': [8, 13],
+              'top-right': [92, 13],
+              'middle-left': [8, 50],
+              'middle-right': [92, 50],
+              'bottom-left': [8, 87],
+              'bottom-right': [92, 87],
+              'open-area': [50, 50]
+          };
+
+          for (const [anchorName, [x, y]] of Object.entries(points)) {
+              const label = document.createElement('label');
+              label.style.cssText = `position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;`;
+
+              const radio = document.createElement('input');
+              radio.type = 'radio';
+              radio.name = 'mtt-panel-anchor';
+              radio.value = anchorName;
+              radio.checked = settings.anchor === anchorName;
+              radio.style.cursor = 'pointer';
+
+              radio.addEventListener('change', () => {
+                  const next = saveMttPanelPlacement({
+                      mode: MTT_PANEL_MODES.FIXED,
+                      anchor: anchorName
+                  });
+                  fixedRadio.checked = true;
+                  contentRadio.checked = false;
+                  applyMttPanelPlacement(panel, next);
+                  updateMttPlacementDialogPreview(dialog);
+              });
+
+              label.appendChild(radio);
+              safeArea.appendChild(label);
+          }
+
+          safeArea.appendChild(shade);
+          preview.append(topbar, leftPanel, contentArea, safeArea);
+
+          const detail = document.createElement('div');
+          detail.className = 'mtt-placement-detail';
+          detail.style.cssText = 'margin-top:7px;padding:6px 7px;border:1px solid #bbb;border-radius:3px;background:#fff;font:10px/1.35 Consolas,monospace;white-space:normal;';
+
+
+          const onModeChange = () => {
+              const mode = contentRadio.checked
+                  ? MTT_PANEL_MODES.CONTENT_END
+                  : MTT_PANEL_MODES.FIXED;
+
+              const next = saveMttPanelPlacement({ mode });
+              applyMttPanelPlacement(panel, next);
+              updateMttPlacementDialogPreview(dialog);
+          };
+
+          contentRadio.addEventListener('change', onModeChange);
+          fixedRadio.addEventListener('change', onModeChange);
+
+          dialog.append(heading, modeRow, preview, detail);
+          overlay.appendChild(dialog);
+          document.body.appendChild(overlay);
+
+          overlay.addEventListener('click', event => {
+              if (event.target === overlay) overlay.remove();
+          });
+
+          updateMttPlacementDialogPreview(dialog);
+      }
+
+      function updateMttPlacementDialogPreview(dialog) {
+          if (!dialog) return;
+
+          const settings = loadMttPanelPlacement();
+          const bounds = measureMttPlacementBounds();
+          const preview = dialog.querySelector('.mtt-placement-preview');
+          const safeArea = preview && preview.querySelector('div:nth-child(4)');
+          const shade = dialog.querySelector('.mtt-placement-shade');
+          const detail = dialog.querySelector('.mtt-placement-detail');
+          const anchorInputs = Array.from(dialog.querySelectorAll('input[name="mtt-panel-anchor"]'));
+
+          const enabled = settings.mode === MTT_PANEL_MODES.FIXED;
+
+          for (const input of anchorInputs) {
+              input.disabled = !enabled;
+          }
+
+          if (safeArea) safeArea.style.opacity = enabled ? '1' : '.45';
+          if (shade) shade.style.display = enabled ? 'block' : 'none';
+
+          if (shade && enabled) {
+              const styles = {
+                  'top-left':     ['6%', '8%', '42%', '52%'],
+                  'top-right':    ['52%', '8%', '42%', '52%'],
+                  'middle-left':  ['6%', '5%', '42%', '90%'],
+                  'middle-right': ['52%', '5%', '42%', '90%'],
+                  'bottom-left':  ['6%', '40%', '42%', '52%'],
+                  'bottom-right': ['52%', '40%', '42%', '52%'],
+                  'open-area':    ['5%', '5%', '90%', '90%']
+              };
+
+              const [left, top, width, height] = styles[settings.anchor] || styles['top-left'];
+              shade.style.left = left;
+              shade.style.top = top;
+              shade.style.width = width;
+              shade.style.height = height;
+          }
+
+          if (!detail) return;
+
+          if (!enabled) {
+              detail.textContent =
+                  'Content End: Panel is placed after the last UI item in the Content Area.';
+              return;
+          }
+
+          const descriptions = {
+              'top-left': 'Top-Left: Close to the Content Area, fills 60% of the available height.',
+              'top-right': 'Top-Right: Close to the right viewport edge, fills 60% of the available height.',
+              'middle-left': 'Middle-Left: Close to the Content Area, fills the available height.',
+              'middle-right': 'Middle-Right: Close to the right viewport edge, fills the available height.',
+              'bottom-left': 'Bottom-Left: Close to the Content Area, fills 60% of the available height upward.',
+              'bottom-right': 'Bottom-Right: Close to the right viewport edge, fills 60% of the available height upward.',
+              'open-area': 'Open Area: Fills the available space between the Content Area and viewport bounds.'
+          };
+
+          detail.textContent = descriptions[settings.anchor] || '';
       }
 
       function renderDailyHeading(day, totals) {
@@ -4560,6 +5716,7 @@ function hw7RunDocumentEndModules() {
 
       function renderTradeDays(s, rows, state) {
           const wrap = document.createElement('div');
+          wrap.className = 'mtt-ledger-scroll-body';
           wrap.appendChild(line('TRADE DAYS', COLORS.title));
 
           const days = Array.isArray(s.tradeDays) ? s.tradeDays : groupTradeDays(s.tradeLedger && s.tradeLedger.trades);
@@ -4597,6 +5754,7 @@ function hw7RunDocumentEndModules() {
 
       function renderTradeDayHeader(day, collapsed, s, rows, state, balance) {
           const dayWrap = document.createElement('div');
+          dayWrap.className = 'mtt-trade-day-header';
           dayWrap.style.margin = '2px -3px 0';
           dayWrap.style.padding = '0 0 0 5px';
           dayWrap.style.lineHeight = '22px';
@@ -4679,6 +5837,7 @@ function hw7RunDocumentEndModules() {
 
           if (swimParts.length > 0) {
               const swimLine = document.createElement('div');
+              swimLine.className = 'mtt-trade-source-line';
               swimLine.style.fontSize = '11px';
               //swimLine.style.fontStyle = 'italic';
               swimLine.appendChild(textNode('Jungle Δ '));
@@ -4702,6 +5861,7 @@ function hw7RunDocumentEndModules() {
           }
 
           const tradeLine = document.createElement('div');
+          tradeLine.className = 'mtt-trade-source-line';
           tradeLine.style.fontSize = '11px';
           //tradeLine.style.fontStyle = 'italic';
           tradeLine.appendChild(textNode('Trades Δ '));
@@ -4723,6 +5883,7 @@ function hw7RunDocumentEndModules() {
 
       function renderTradeGroup(group) {
           const wrap = document.createElement('div');
+          wrap.className = 'mtt-trade-group';
           const color = COLORS[group.code] || COLORS.text;
 
           wrap.appendChild(textNode(` ${fmtInt(group.from, 3)}↠${fmtInt(group.to, 3)} `));
@@ -4759,7 +5920,7 @@ function hw7RunDocumentEndModules() {
           return wrap;
       }
 
-      function renderPreviewBlock(s) {
+      function renderStockBlock(stock) {
           const box = document.createElement('div');
 
           box.style.cssText = [
@@ -4767,29 +5928,18 @@ function hw7RunDocumentEndModules() {
               'bottom:0',
               'right:0',
               'left:0',
+              'box-sizing:border-box',
+              'z-index:1',
               'background-color:#333333',
-              'border-top: 3px solid #111111',
-              'padding:3px 0',
+              'border-top:3px solid #111111',
+              'padding:4px 0',
               'margin:auto 0 0',
-              'max-height:146px',
-              'min-height:146px',
+              'min-height:34px',
               'text-align:center',
               'white-space:pre'
           ].join(';');
 
-          box.appendChild(renderStock(s.stock));
-          box.appendChild(renderTradePreviewHeading(s.tradePost.rows));
-
-          const usefulRows = s.tradePost.rows.filter(r => TRADE_ORES.includes(r.code));
-
-          if (usefulRows.length) {
-              for (const r of usefulRows) {
-                  box.appendChild(renderTradePreview(r));
-              }
-          } else {
-              box.appendChild(line('No preview rows parsed.', COLORS.dim));
-          }
-
+          box.appendChild(renderStock(stock));
           return box;
       }
 
@@ -4930,8 +6080,10 @@ function hw7RunDocumentEndModules() {
           wrap.id = 'mtt-button-panel';
           wrap.style.cssText = [
               'position:sticky',
-              'bottom:146px',
-              'top:calc(100% - 171px)',
+              'bottom:34px',
+              'top:calc(100% - 59px)',
+              'box-sizing:border-box',
+              'z-index:2',
               'background-color:#111111',
               'border-top:2px solid #111111',
               'display:flex',
