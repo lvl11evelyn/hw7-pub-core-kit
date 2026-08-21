@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.13
+// @version      2.14
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -8730,6 +8730,1428 @@ body div.content-wrap div.content-area {
       return String(s || '').replace(/\s+/g, ' ').trim();
     }
   })();
+
+  /* ===== HW Mining Log ===== */
+  (() => {
+      'use strict';
+
+      const params = new URLSearchParams(location.search);
+      if (params.get('cmd') !== 'mines') return;
+
+      const isBlastPage =
+          /[?&]blast=(?:north|south|east|west)(?:[&#]|$)/i.test(location.href);
+
+      const STORAGE = Object.freeze({
+          log: 'hw_mining_log_test_v1',
+          settings: 'hw_mining_log_test_settings_v1',
+          lastFingerprint: 'hw_mining_log_test_last_fp_v1',
+          helperImported: 'hw_mining_log_test_helper_imported_v1'
+      });
+
+      const DEFAULT_SETTINGS = Object.freeze({
+          showOreFound: true,
+          showImpliedOre: true,
+          showTradesToday: false,
+          showBlackOreTrades: false,
+          showMiningGain: false,
+          showMiningGainPerT: false,
+          showAwakeUsed: false,
+          showNetStatGain: false,
+          fractionLength: 'auto'
+      });
+
+      const YIELD_ORDER = Object.freeze([
+          'Green Ore',
+          'White Ore',
+          'Yellow Ore',
+          'Orange Ore',
+          'Red Ore',
+          'Purple Ore',
+          'Black Ore',
+          'Hobalt Shard',
+          'Crystal Skull'
+      ]);
+
+      const YIELD_LABELS = Object.freeze({
+          'Green Ore': 'Gr Ore',
+          'White Ore': 'Wh Ore',
+          'Yellow Ore': 'Ye Ore',
+          'Orange Ore': 'Or Ore',
+          'Red Ore': 'Re Ore',
+          'Purple Ore': 'Pu Ore',
+          'Black Ore': 'Bl Ore',
+          'Hobalt Shard': 'Hob Sh',
+          'Crystal Skull': 'Cr Sku'
+      });
+
+      const DESTRUCTIBLE_MINING_GEAR = new Set([
+          'Pickaxe',
+          "Miner's Cap",
+          'Pockets',
+          'Spelunking Satchel',
+          'Dynamite Pouch',
+          'Blast Jacket'
+      ]);
+
+      const contentArea = document.querySelector('.content-area');
+      if (!contentArea) return;
+
+      // The redesigned panel owns this reserved lower region.
+      contentArea.style.setProperty('padding-bottom', '370px', 'important');
+
+      const importedHelperData = importHelperHistoryOnce();
+
+      // Helper may already have rendered its entire historical Mining Log into
+      // .content-area by the time this test module runs. Remove that donor UI
+      // before serializing or scanning the native Mines page.
+      removeHelperMiningLog();
+
+      const nativeYieldImageCache = buildNativeYieldImageCache();
+
+      // If Helper supplied the initial snapshot on this very page, do not parse
+      // the same visible result again during the first test-module load.
+      if (!importedHelperData) {
+          recordCurrentPage();
+      }
+
+      render();
+
+      function loadLog() {
+          return readObject(STORAGE.log, {});
+      }
+
+      function saveLog(log) {
+          localStorage.setItem(STORAGE.log, JSON.stringify(log));
+      }
+
+      function loadSettings() {
+          const stored = readObject(STORAGE.settings, {});
+
+          return {
+              ...DEFAULT_SETTINGS,
+              ...stored,
+              showOreFound: stored.showOreFound ?? stored.showOreActual ?? DEFAULT_SETTINGS.showOreFound,
+              showImpliedOre: stored.showImpliedOre ?? stored.showOreImplied ?? DEFAULT_SETTINGS.showImpliedOre,
+              showTradesToday: stored.showTradesToday ?? stored.showOresTraded ?? DEFAULT_SETTINGS.showTradesToday,
+              showAwakeUsed: stored.showAwakeUsed ?? stored.showTSpent ?? DEFAULT_SETTINGS.showAwakeUsed,
+              showNetStatGain: stored.showNetStatGain ?? stored.showTradeStatGain ?? DEFAULT_SETTINGS.showNetStatGain,
+              fractionLength: ['auto', '1', '2', '3', '4', '5'].includes(String(stored.fractionLength))
+                  ? String(stored.fractionLength)
+                  : DEFAULT_SETTINGS.fractionLength
+          };
+      }
+
+      function saveSettings(settings) {
+          localStorage.setItem(STORAGE.settings, JSON.stringify(settings));
+      }
+
+      function readObject(key, fallback) {
+          try {
+              const raw = localStorage.getItem(key);
+              if (!raw) return fallback;
+              const parsed = JSON.parse(raw);
+              return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                  ? parsed
+                  : fallback;
+          } catch {
+              return fallback;
+          }
+      }
+
+      function importHelperHistoryOnce() {
+          if (localStorage.getItem(STORAGE.helperImported) === '1') return false;
+
+          localStorage.setItem(STORAGE.helperImported, '1');
+
+          let helper;
+          try {
+              helper = JSON.parse(localStorage.getItem('hw_mines_log_data') || '{}');
+          } catch {
+              return false;
+          }
+
+          if (!helper || typeof helper !== 'object' || Array.isArray(helper)) {
+              return false;
+          }
+
+          const dates = Object.keys(helper);
+          if (!dates.length) return false;
+
+          const target = loadLog();
+
+          for (const date of dates) {
+              const sourceDay = helper[date];
+              if (!sourceDay || typeof sourceDay !== 'object') continue;
+
+              const day = normalizeDay(target[date]);
+
+              for (const [rawName, rawCount] of Object.entries(sourceDay.ores || {})) {
+                  const name = canonicalYieldName(rawName);
+                  const count = Math.max(0, Number.parseInt(rawCount, 10) || 0);
+
+                  if (!name || name === 'Hobalt Chunk' || count <= 0) continue;
+                  day.ores[name] = Math.max(day.ores[name] || 0, count);
+              }
+
+              if (Array.isArray(sourceDay.saves) && sourceDay.saves.length) {
+                  // Helper preserves individual rescue occurrences. Copy them
+                  // verbatim so repeated rescues remain countable.
+                  if (!day.rescues.length) {
+                      day.rescues = sourceDay.saves
+                          .map(s => ({
+                              id: String(s && s.id || '').trim(),
+                              name: String(s && s.name || '').trim()
+                          }))
+                          .filter(s => /^\d+$/.test(s.id) && s.name);
+                  }
+              }
+
+              const helperMiningGain = Number.parseFloat(sourceDay.exp);
+              const helperTUsed = Number.parseInt(sourceDay.tUsed, 10);
+              const helperTraded = Number.parseInt(sourceDay.traded, 10);
+
+              if (Number.isFinite(helperMiningGain)) {
+                  day.miningGain = Math.max(day.miningGain, helperMiningGain);
+              }
+              if (Number.isFinite(helperTUsed)) {
+                  day.tUsed = Math.max(day.tUsed, helperTUsed);
+              }
+              if (Number.isFinite(helperTraded)) {
+                  day.oresTraded = Math.max(day.oresTraded, helperTraded);
+              }
+
+              target[date] = day;
+          }
+
+          saveLog(target);
+          return true;
+      }
+
+      function normalizeDay(value) {
+          const day = value && typeof value === 'object' ? value : {};
+
+          return {
+              ores: day.ores && typeof day.ores === 'object' ? day.ores : {},
+              images: day.images && typeof day.images === 'object' ? day.images : {},
+              rescues: Array.isArray(day.rescues) ? day.rescues : [],
+              destroyed: Array.isArray(day.destroyed) ? day.destroyed : [],
+              miningGain: finiteOrZero(day.miningGain),
+              tUsed: Math.max(0, Number.parseInt(day.tUsed, 10) || 0),
+              oreFound: finiteOrNull(day.oreFound),
+              shardsFound: finiteOrNull(day.shardsFound),
+              oresTraded: Math.max(0, Number.parseInt(day.oresTraded, 10) || 0),
+              blackOreTrades: Math.max(0, Number.parseInt(day.blackOreTrades, 10) || 0),
+              tradeStatGain: finiteOrNull(day.tradeStatGain)
+          };
+      }
+
+      function recordCurrentPage() {
+          const html = contentArea.innerHTML || '';
+          const text = normalizeSpace(contentArea.textContent || '');
+
+          const result = parseActionResult(html, text);
+          const counters = parseMineCounters(text);
+
+          if (!result.hasEvent) {
+              updateDailyCountersOnly(counters);
+              return;
+          }
+
+          const date = getHoboDateKey();
+          if (!date) return;
+
+          const fingerprint = makeFingerprint(date, counters, result);
+          if (fingerprint && fingerprint === localStorage.getItem(STORAGE.lastFingerprint)) {
+              updateDailyCountersOnly(counters);
+              return;
+          }
+
+          if (fingerprint) {
+              localStorage.setItem(STORAGE.lastFingerprint, fingerprint);
+          }
+
+          const log = loadLog();
+          const day = normalizeDay(log[date]);
+
+          for (const found of result.ores) {
+              day.ores[found.name] = (Number.parseInt(day.ores[found.name], 10) || 0) + found.count;
+              if (found.src && !day.images[found.name]) {
+                  day.images[found.name] = found.src;
+              }
+          }
+
+          if (result.rescues.length) {
+              day.rescues.push(...result.rescues);
+          }
+
+          for (const item of result.destroyed) {
+              if (!day.destroyed.includes(item)) {
+                  day.destroyed.push(item);
+              }
+          }
+
+          if (
+              Number.isFinite(result.miningGain) &&
+              result.miningGain > 0 &&
+              !Number.isFinite(counters.miningGainDaily)
+          ) {
+              day.miningGain += result.miningGain;
+          }
+
+          applyAuthoritativeCounters(day, counters);
+
+          log[date] = day;
+          saveLog(log);
+      }
+
+      function updateDailyCountersOnly(suppliedCounters = null) {
+          const counters = suppliedCounters || parseMineCounters(
+              normalizeSpace(contentArea.textContent || '')
+          );
+
+          if (!hasAnyAuthoritativeCounter(counters)) return;
+
+          const date = getHoboDateKey();
+          if (!date) return;
+
+          const log = loadLog();
+          const day = normalizeDay(log[date]);
+
+          applyAuthoritativeCounters(day, counters);
+
+          log[date] = day;
+          saveLog(log);
+      }
+
+      function hasAnyAuthoritativeCounter(counters) {
+          return [
+              counters && counters.tUsed,
+              counters && counters.oreFound,
+              counters && counters.shardsFound,
+              counters && counters.oresTraded,
+              counters && counters.miningGainDaily
+          ].some(Number.isFinite);
+      }
+
+      function applyAuthoritativeCounters(day, counters) {
+          if (!day || !counters) return;
+
+          // These are cumulative native Mines counters. Max protects the daily
+          // record against browser-back navigation to an older result page.
+          if (Number.isFinite(counters.tUsed)) {
+              day.tUsed = Math.max(day.tUsed, counters.tUsed);
+          }
+
+          if (Number.isFinite(counters.oreFound)) {
+              day.oreFound = Number.isFinite(day.oreFound)
+                  ? Math.max(day.oreFound, counters.oreFound)
+                  : counters.oreFound;
+          }
+
+          if (Number.isFinite(counters.shardsFound)) {
+              day.shardsFound = Number.isFinite(day.shardsFound)
+                  ? Math.max(day.shardsFound, counters.shardsFound)
+                  : counters.shardsFound;
+          }
+
+          if (Number.isFinite(counters.oresTraded)) {
+              day.oresTraded = Math.max(day.oresTraded, counters.oresTraded);
+          }
+
+          // Only the Blast UI's "Mine stat:" field means today's cumulative
+          // Mining-stat gain. When present, it supersedes observed event sums.
+          if (Number.isFinite(counters.miningGainDaily)) {
+              day.miningGain = Math.max(day.miningGain, counters.miningGainDaily);
+          }
+      }
+
+      function parseActionResult(html, text) {
+          const ores = [];
+          const rescues = [];
+          const destroyed = [];
+
+          const oreRegex = /You get (?:the )?(?:<b>)?(?:\(?(?:<b>)?(\d+)(?:<\/b>)?\)?\s+)?(?:<b>)?([A-Za-z]+(?:\s+[A-Za-z]+)*?)(?:<\/b>)?(?=\s*(?:<a|<br>|<\/span>|<img)|$)/gi;
+          let match;
+
+          while ((match = oreRegex.exec(html)) !== null) {
+              const count = Math.max(1, Number.parseInt(match[1], 10) || 1);
+              const name = canonicalYieldName(match[2]);
+
+              if (!name || name === 'Hobalt Chunk') continue;
+
+              ores.push({
+                  name,
+                  count,
+                  src: findYieldImageSrc(name, html)
+              });
+          }
+
+          const saveRegex = /pull\s+<a[^>]+ID=(\d+)[^>]*>([^<]+)<\/a>\s+out to safety/gi;
+          let saveMatch;
+
+          while ((saveMatch = saveRegex.exec(html)) !== null) {
+              rescues.push({
+                  id: saveMatch[1],
+                  name: decodeEntities(saveMatch[2]).trim()
+              });
+          }
+
+          const miningMatch =
+              text.match(/You gain(?:ed)?\s+([0-9]+(?:\.[0-9]+)?)\s+mining!/i);
+
+          const destructionText = normalizeSpace(
+              contentArea.innerText || contentArea.textContent || ''
+          );
+
+          // Durability warnings such as
+          // "Your Dynamite Pouch is looking pretty rough around the edges..."
+          // are intentionally ignored. Only the terminal destruction sentence
+          // is a Mining Log event.
+          const destructionRegex =
+              /A falling rock rips open your (.+?)\. It's completely ruined 🙁/g;
+
+          let destructionMatch;
+
+          while ((destructionMatch = destructionRegex.exec(destructionText)) !== null) {
+              const item = normalizeSpace(destructionMatch[1]);
+
+              if (
+                  DESTRUCTIBLE_MINING_GEAR.has(item) &&
+                  !destroyed.includes(item)
+              ) {
+                  destroyed.push(item);
+              }
+          }
+
+          return {
+              ores,
+              rescues,
+              destroyed,
+              miningGain: miningMatch ? Number.parseFloat(miningMatch[1]) : null,
+              hasEvent:
+                  ores.length > 0 ||
+                  rescues.length > 0 ||
+                  destroyed.length > 0 ||
+                  !!miningMatch
+          };
+      }
+
+      function parseMineCounters(text) {
+          const tMatch = text.match(/\bT used:\s*([\d,]+)/i);
+          const oreFoundMatch = text.match(/\bOre found:\s*([\d,]+)/i);
+          const tradedMatch = text.match(/\bOre traded:\s*([\d,]+)/i);
+
+          let shardsFound = null;
+
+          const shardNode = contentArea.querySelector(
+              'span[title="shards found today"]'
+          );
+
+          if (shardNode) {
+              const shardValue = Number.parseInt(
+                  String(shardNode.textContent || '').replace(/,/g, ''),
+                  10
+              );
+              if (Number.isFinite(shardValue)) shardsFound = shardValue;
+          }
+
+          if (!Number.isFinite(shardsFound)) {
+              const shardMatch = text.match(
+                  /\bOre found:\s*[\d,]+\s*\[\s*([\d,]+)\s*\]/i
+              );
+              if (shardMatch) {
+                  const shardValue = Number.parseInt(
+                      shardMatch[1].replace(/,/g, ''),
+                      10
+                  );
+                  if (Number.isFinite(shardValue)) shardsFound = shardValue;
+              }
+          }
+
+          let miningGainDaily = null;
+
+          if (isBlastPage) {
+              const miningMatch = text.match(
+                  /\bMine stat:\s*([0-9]+(?:\.[0-9]+)?)/i
+              );
+
+              if (miningMatch) {
+                  const value = Number.parseFloat(miningMatch[1]);
+                  if (Number.isFinite(value)) miningGainDaily = value;
+              }
+          }
+
+          return {
+              tUsed: tMatch
+                  ? Number.parseInt(tMatch[1].replace(/,/g, ''), 10)
+                  : null,
+              oreFound: oreFoundMatch
+                  ? Number.parseInt(oreFoundMatch[1].replace(/,/g, ''), 10)
+                  : null,
+              shardsFound,
+              oresTraded: tradedMatch
+                  ? Number.parseInt(tradedMatch[1].replace(/,/g, ''), 10)
+                  : null,
+              miningGainDaily
+          };
+      }
+
+      function canonicalYieldName(raw) {
+          const text = normalizeSpace(raw)
+              .replace(/\bOres\b/i, 'Ore')
+              .replace(/\bShards\b/i, 'Shard');
+
+          return YIELD_ORDER.find(name => name.toLowerCase() === text.toLowerCase()) || null;
+      }
+
+      function buildNativeYieldImageCache() {
+          const cache = Object.create(null);
+
+          // Prefer HoboWars/Helper's canonical ore-image registry when exposed.
+          const registry =
+              (typeof window.OresData === 'object' && window.OresData) ||
+              null;
+
+          if (registry) {
+              for (const name of YIELD_ORDER) {
+                  const src = registry[name];
+                  if (typeof src === 'string' && src) {
+                      cache[name] = src;
+                  }
+              }
+          }
+
+          // One DOM scan, once per page load. Never scan the entire Content Area
+          // again while constructing historical day cards.
+          for (const img of contentArea.querySelectorAll('img')) {
+              const title = normalizeSpace(img.getAttribute('title') || '');
+              const alt = normalizeSpace(img.getAttribute('alt') || '');
+
+              for (const name of YIELD_ORDER) {
+                  if (cache[name]) continue;
+
+                  if (
+                      title.toLowerCase() === name.toLowerCase() ||
+                      alt.toLowerCase() === name.toLowerCase()
+                  ) {
+                      cache[name] = img.currentSrc || img.src || '';
+                  }
+              }
+          }
+
+          return cache;
+      }
+
+      function findYieldImageSrc(name, html = '') {
+          if (nativeYieldImageCache && nativeYieldImageCache[name]) {
+              return nativeYieldImageCache[name];
+          }
+
+          // Current-result fallback only; never perform another DOM-wide image
+          // search. This is retained for a native result whose image identity
+          // exists only in the result HTML.
+          if (html) {
+              const escaped = escapeRegExp(name);
+              const m = String(html).match(
+                  new RegExp(
+                      `<img[^>]+(?:title|alt)=["']${escaped}["'][^>]*src=["']([^"']+)["']`,
+                      'i'
+                  )
+              );
+
+              if (m && m[1]) {
+                  nativeYieldImageCache[name] = m[1];
+                  return m[1];
+              }
+          }
+
+          return '';
+      }
+
+      function render() {
+          document.getElementById('hw-mining-log-test')?.remove();
+
+          const settings = loadSettings();
+          const log = loadLog();
+
+          const panel = create('section', 'hw-mining-log-test');
+          panel.id = 'hw-mining-log-test';
+
+          assign(panel, {
+              maxWidth: 'calc(100% - 20px)',
+              boxSizing: 'border-box',
+              padding: '0',
+              margin: '0',
+              position: 'absolute',
+              maxHeight: '350px',
+              borderRadius: '2px',
+              top: 'calc(100% - 360px)',
+              boxShadow: '1px 1px 0.5px 2px #444a',
+              background: '#d4d4d4',
+              border: '2px solid rgb(2, 2, 2)',
+              overflowY: 'auto',
+              overflowX: 'hidden'
+          });
+
+          const header = create('header', 'hw-mining-log-header');
+          assign(header, {
+              position: 'sticky',
+              top: '0',
+              zIndex: '10',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              minHeight: '22px',
+              boxSizing: 'border-box',
+              padding: '2px 5px',
+              backgroundColor: '#d4d4d4',
+              borderBottom: '1px solid #999'
+          });
+
+          const title = create('strong', 'hw-mining-log-title', 'Mining Log');
+          title.style.flex = '1 1 auto';
+          title.style.textAlign = 'center';
+
+          const settingsButton = create('button', 'hw-mining-log-settings-button');
+          settingsButton.type = 'button';
+          settingsButton.title = 'Mining Log display settings';
+          assign(settingsButton, {
+              flex: '0 0 auto',
+              width: '18px',
+              height: '18px',
+              padding: '0',
+              border: '1px solid #777',
+              borderRadius: '2px',
+              background: '#eee',
+              cursor: 'pointer',
+              lineHeight: '16px'
+          });
+          const settingsIcon = create('span', 'hw-mining-log-settings-icon', '⚙');
+          assign(settingsIcon, {
+              display: 'inline-block',
+              transform: 'scale(1.35)',
+              transformOrigin: 'center'
+          });
+          settingsButton.replaceChildren(settingsIcon);
+
+          settingsButton.addEventListener('click', openSettings);
+
+          header.append(title, settingsButton);
+
+          const days = create('div', 'hw-mining-log-days');
+
+          const dates = Object.keys(log)
+              .filter(date => dayHasContent(normalizeDay(log[date])))
+              .sort((a, b) => String(b).localeCompare(String(a)));
+
+          if (!dates.length) {
+              const empty = create('div', 'hw-mining-log-empty', 'No mining history recorded yet.');
+              assign(empty, {
+                  padding: '12px',
+                  textAlign: 'center',
+                  color: '#666'
+              });
+              days.append(empty);
+          } else {
+              const RENDER_CHUNK = 6;
+              let renderedCount = 0;
+
+              const appendChunk = () => {
+                  const fragment = document.createDocumentFragment();
+                  const limit = Math.min(dates.length, renderedCount + RENDER_CHUNK);
+
+                  while (renderedCount < limit) {
+                      const date = dates[renderedCount++];
+                      fragment.append(
+                          buildDay(date, normalizeDay(log[date]), settings)
+                      );
+                  }
+
+                  days.append(fragment);
+              };
+
+              appendChunk();
+
+              panel.addEventListener('scroll', () => {
+                  if (renderedCount >= dates.length) return;
+
+                  const remaining =
+                      panel.scrollHeight - panel.scrollTop - panel.clientHeight;
+
+                  if (remaining <= 160) {
+                      appendChunk();
+                  }
+              }, { passive: true });
+          }
+
+          panel.append(header, days);
+          contentArea.append(panel);
+      }
+
+      function buildDay(date, day, settings) {
+          const card = create('article', 'hw-mining-log-day');
+          assign(card, {
+              marginBottom: '10px',
+              border: '1px solid #999',
+              background: '#fff',
+              padding: '8px',
+              boxSizing: 'border-box'
+          });
+
+          const dayHeader = create('div', 'hw-mining-log-day-header');
+          assign(dayHeader, {
+              fontWeight: 'bold',
+              background: '#f0f0f0',
+              padding: '4px',
+              margin: '-8px -8px 8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+          });
+
+          const dateLabel = create('span', 'hw-mining-log-day-date', date);
+
+          const clear = create('button', 'hw-mining-log-day-clear', 'Clear');
+          clear.type = 'button';
+          assign(clear, {
+              color: '#d9534f',
+              fontSize: '11px',
+              fontWeight: 'normal',
+              padding: '2px 6px',
+              border: '1px solid #d9534f',
+              borderRadius: '3px',
+              background: '#fff',
+              cursor: 'pointer'
+          });
+
+          clear.addEventListener('click', () => {
+              if (!confirm(`Are you sure you want to clear the mining log for ${date}?`)) return;
+              const log = loadLog();
+              delete log[date];
+              saveLog(log);
+              render();
+          });
+
+          dayHeader.append(dateLabel, clear);
+
+          const metrics = buildMetrics(day, settings);
+          const yields = buildYieldCards(day);
+          const events = buildEvents(day);
+
+          card.append(dayHeader);
+          if (metrics.childElementCount) card.append(metrics);
+          card.append(yields);
+          if (events.childElementCount) card.append(events);
+
+          return card;
+      }
+
+      function buildMetrics(day, settings) {
+          const wrap = create('div', 'hw-mining-log-metrics');
+          assign(wrap, {
+              display: 'flex',
+              flexWrap: 'nowrap',
+              justifyContent: 'space-evenly',
+              alignItems: 'flex-start',
+              width: '100%',
+              gap: '6px 0',
+              fontSize: '12px',
+              marginBottom: '5px'
+          });
+
+          const actualQty = calcActualQty(day);
+          const impliedQty = calcImpliedQty(day);
+
+          const pairs = [
+              {
+                  pair: 1,
+                  items: [
+                      settings.showOreFound
+                          ? metricDescriptor(
+                              'Found',
+                              formatInt(actualQty),
+                              buildEfficiency(actualQty, day.tUsed, settings),
+                              'hw-mining-log-metric-ore-found',
+                              'Ore found today'
+                          )
+                          : null,
+                      settings.showImpliedOre
+                          ? metricDescriptor(
+                              'Implied',
+                              formatInt(impliedQty),
+                              buildEfficiency(impliedQty, day.tUsed, settings),
+                              'hw-mining-log-metric-implied-ore',
+                              'Shards count as 3 ore'
+                          )
+                          : null
+                  ].filter(Boolean)
+              },
+              {
+                  pair: 2,
+                  items: [
+                      settings.showTradesToday
+                          ? metricDescriptor('Trades', formatInt(day.oresTraded), '', 'hw-mining-log-metric-trades-today', 'Stat trades today')
+                          : null,
+                      settings.showBlackOreTrades
+                          ? metricDescriptor('Life Trades', formatInt(day.blackOreTrades), '', 'hw-mining-log-metric-black-trades', 'Black ore trades today')
+                          : null
+                  ].filter(Boolean)
+              },
+              {
+                  pair: 3,
+                  items: [
+                      settings.showAwakeUsed
+                          ? metricDescriptor('Awake', `${formatInt(day.tUsed)}T`, '', 'hw-mining-log-metric-awake-used', 'Amount of Awake spent mining today')
+                          : null,
+                      settings.showNetStatGain
+                          ? metricDescriptor('Net Gain', formatFractionValue(day.tradeStatGain, settings), '', 'hw-mining-log-metric-net-stat', 'Net stat gain from the current 10-trade band')
+                          : null
+                  ].filter(Boolean)
+              },
+              {
+                  pair: 4,
+                  items: [
+                      settings.showMiningGain
+                          ? metricDescriptor('Mining', formatFractionValue(day.miningGain, settings), '', 'hw-mining-log-metric-mining-gain', 'Mining stat gained today')
+                          : null,
+                      settings.showMiningGainPerT
+                          ? metricDescriptor(
+                              'Mine Stat/T',
+                              day.tUsed > 0 ? formatFractionValue(day.miningGain / day.tUsed, settings, true) : '---',
+                              '',
+                              'hw-mining-log-metric-mining-per-t',
+                              'Your Mining stat gain per Awake used'
+                          )
+                          : null
+                  ].filter(Boolean)
+              }
+          ];
+
+          const resolvedGroups = resolveMetricGroups(pairs);
+          const groupCount = Math.max(1, resolvedGroups.length);
+          const groupBasis =
+              groupCount >= 4 ? '25%' :
+              groupCount === 3 ? '33.3333%' :
+              groupCount === 2 ? '50%' :
+              '100%';
+
+          for (const groupItems of resolvedGroups) {
+              const group = create('div', 'hw-mining-log-metric-group');
+              assign(group, {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  flex: `0 1 ${groupBasis}`,
+                  width: groupBasis,
+                  maxWidth: groupBasis,
+                  minWidth: '0',
+                  boxSizing: 'border-box',
+                  padding: '0 6px'
+              });
+
+              for (const descriptor of groupItems) {
+                  group.append(buildMetric(descriptor));
+              }
+
+              wrap.append(group);
+          }
+
+          return wrap;
+      }
+
+      function metricDescriptor(label, value, suffix, className, titleText = '') {
+          return { label, value, suffix, className, titleText };
+      }
+
+      function resolveMetricGroups(pairs) {
+          const groups = [];
+          const orphans = [];
+
+          for (const pair of pairs) {
+              if (pair.items.length >= 2) {
+                  groups.push({
+                      order: pair.pair,
+                      items: pair.items
+                  });
+              } else if (pair.items.length === 1) {
+                  orphans.push({
+                      order: pair.pair,
+                      item: pair.items[0]
+                  });
+              }
+          }
+
+          orphans.sort((a, b) => a.order - b.order);
+
+          for (let i = 0; i < orphans.length; i += 2) {
+              const first = orphans[i];
+              const second = orphans[i + 1];
+
+              groups.push({
+                  order: first.order,
+                  items: second
+                      ? [first.item, second.item]
+                      : [first.item]
+              });
+          }
+
+          groups.sort((a, b) => a.order - b.order);
+          return groups.map(group => group.items);
+      }
+
+      function buildMetric(descriptor) {
+          const item = create('div', `hw-mining-log-metric ${descriptor.className || ''}`.trim());
+
+          assign(item, {
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'flex-start',
+              width: '100%',
+              minWidth: '0',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              textAlign: 'left'
+          });
+
+          const label = create('b', 'hw-mining-log-metric-label', `${descriptor.label}:\u00A0`);
+          const value = create('span', 'hw-mining-log-metric-value', descriptor.value);
+
+          if (descriptor.titleText) {
+              item.title = descriptor.titleText;
+              label.title = descriptor.titleText;
+              value.title = descriptor.titleText;
+          }
+
+          assign(value, {
+              minWidth: '0',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+          });
+
+          item.append(label, value);
+
+          if (descriptor.suffix) {
+              const suffix = create('span', 'hw-mining-log-metric-efficiency', ` (${descriptor.suffix})`);
+              assign(suffix, {
+                  color: 'rgb(95, 95, 95)',
+                  fontSize: '0.9em',
+                  marginLeft: '2px',
+                  minWidth: '0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+              });
+              item.append(suffix);
+          }
+
+          return item;
+      }
+
+      function buildEfficiency(quantity, tUsed, settings) {
+          if (!Number.isFinite(Number(quantity)) || !Number.isFinite(Number(tUsed)) || Number(tUsed) <= 0) {
+              return '---';
+          }
+
+          return `${formatFractionValue(Number(quantity) / Number(tUsed), settings, true)} Ore/T`;
+      }
+
+      function buildYieldCards(day) {
+          const wrap = create('div', 'hw-mining-log-yields');
+          assign(wrap, {
+              display: 'flex',
+              flexWrap: 'nowrap',
+              gap: '8px',
+              justifyContent: 'flex-start',
+              alignItems: 'stretch'
+          });
+
+          for (const name of YIELD_ORDER) {
+              const qty = Math.max(0, Number.parseInt(day.ores[name], 10) || 0);
+              if (qty <= 0) continue;
+
+              const card = create('div', 'hw-mining-log-yield-card');
+              card.dataset.yield = name;
+
+              assign(card, {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '70px',
+                  minHeight: '75px',
+                  padding: '3px 4px',
+                  border: '1px solid #c0c0c0',
+                  borderRadius: '4px',
+                  color: '#000',
+                  position: 'relative',
+                  boxSizing: 'border-box',
+                  fontFamily: 'Arial, sans-serif',
+                  backgroundColor: '#fff'
+              });
+
+              const src = day.images[name] || nativeYieldImageCache[name] || '';
+
+              if (src) {
+                  const img = create('img', 'hw-mining-log-yield-image');
+                  img.src = src;
+                  img.alt = name;
+                  img.title = name;
+                  assign(img, {
+                      width: '26px',
+                      height: '26px',
+                      maxWidth: '26px',
+                      maxHeight: '26px',
+                      objectFit: 'contain',
+                      flex: '0 0 auto'
+                  });
+                  card.append(img);
+              }
+
+              const label = create('span', 'hw-mining-log-yield-label', name);
+              label.title = name;
+              assign(label, {
+                  fontSize: '10px',
+                  textAlign: 'center',
+                  lineHeight: '1.05',
+                  flex: '0 0 auto'
+              });
+
+              const count = create('div', 'hw-mining-log-yield-quantity', formatInt(qty));
+              assign(count, {
+                  textAlign: 'center',
+                  fontWeight: 'bold',
+                  fontSize: '11px',
+                  lineHeight: '1.05',
+                  flex: '0 0 auto'
+              });
+
+              card.append(label, count);
+              wrap.append(card);
+          }
+
+          if (!wrap.childElementCount) {
+              const none = create('div', 'hw-mining-log-yields-empty', 'No ore finds recorded.');
+              assign(none, {
+                  fontSize: '11px',
+                  color: '#999',
+                  padding: '4px'
+              });
+              wrap.append(none);
+          }
+
+          return wrap;
+      }
+
+      function buildEvents(day) {
+          const wrap = create('div', 'hw-mining-log-events');
+
+          const rescueMap = new Map();
+
+          for (const rescue of day.rescues) {
+              const id = String(rescue && rescue.id || '').trim();
+              const name = String(rescue && rescue.name || '').trim();
+              if (!/^\d+$/.test(id) || !name) continue;
+
+              const existing = rescueMap.get(id);
+              if (existing) {
+                  existing.count += 1;
+              } else {
+                  rescueMap.set(id, { id, name, count: 1 });
+              }
+          }
+
+          if (rescueMap.size) {
+              const line = create('div', 'hw-mining-log-rescues');
+              assign(line, {
+                  marginTop: '8px',
+                  paddingTop: '5px',
+                  borderTop: '1px solid #f0f0f0',
+                  fontSize: '12px'
+              });
+
+              line.append(create('b', 'hw-mining-log-event-label', 'Hobos Rescued: '));
+
+              let index = 0;
+              for (const rescue of rescueMap.values()) {
+                  if (index++) line.append(document.createTextNode(', '));
+
+                  const link = create('a', 'hw-mining-log-rescue-link', rescue.name);
+                  link.href = buildPlayerHref(rescue.id);
+                  link.classList.add('black_dark_link');
+                  link.style.textDecoration = 'underline';
+                  line.append(link);
+
+                  if (rescue.count > 1) {
+                      line.append(document.createTextNode(` ×${rescue.count}`));
+                  }
+              }
+
+              wrap.append(line);
+          }
+
+          if (day.destroyed.length) {
+              const line = create('div', 'hw-mining-log-destroyed');
+              assign(line, {
+                  marginTop: rescueMap.size ? '3px' : '8px',
+                  paddingTop: rescueMap.size ? '0' : '5px',
+                  borderTop: rescueMap.size ? '0' : '1px solid #f0f0f0',
+                  fontSize: '12px'
+              });
+
+              line.append(
+                  create('b', 'hw-mining-log-event-label', 'Equipment Destroyed: '),
+                  document.createTextNode(day.destroyed.join(', '))
+              );
+
+              wrap.append(line);
+          }
+
+          return wrap;
+      }
+
+      function openSettings() {
+          document.getElementById('hw-mining-log-settings-overlay')?.remove();
+
+          const overlay = create('div', 'hw-mining-log-settings-overlay');
+          overlay.id = 'hw-mining-log-settings-overlay';
+          assign(overlay, {
+              position: 'fixed',
+              inset: '0',
+              zIndex: '2147483646',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0,0,0,.45)'
+          });
+
+          const dialog = create('div', 'hw-mining-log-settings-dialog');
+          assign(dialog, {
+              width: 'min(420px, calc(100vw - 30px))',
+              boxSizing: 'border-box',
+              padding: '10px',
+              border: '1px solid #666',
+              borderRadius: '4px',
+              background: '#efefef',
+              color: '#111',
+              boxShadow: '0 3px 16px rgba(0,0,0,.5)',
+              fontFamily: 'Arial, sans-serif',
+              fontSize: '12px'
+          });
+
+          const head = create('div', 'hw-mining-log-settings-header');
+          assign(head, {
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '8px',
+              fontWeight: 'bold'
+          });
+
+          const settingsTitle = create('span', 'hw-mining-log-settings-title', 'Log Settings');
+          settingsTitle.title = 'Changes apply on the next page load.';
+          head.append(settingsTitle);
+
+          const close = create('button', 'hw-mining-log-settings-close', 'X');
+          close.type = 'button';
+          close.style.backgroundImage = 'radial-gradient(#a33b)';
+          close.addEventListener('click', () => overlay.remove());
+          head.append(close);
+
+          const body = create('div', 'hw-mining-log-settings-body');
+          assign(body, {
+              display: 'grid',
+              gridTemplateColumns: '1fr',
+              gap: '5px'
+          });
+
+          const labels = [
+              ['showOreFound', 'Found', 'Ore found today'],
+              ['showImpliedOre', 'Implied', 'Shards count as 3 ore'],
+              ['showTradesToday', 'Trades', 'Stat trades today'],
+              ['showBlackOreTrades', 'Life Trades', 'Black ore trades today'],
+              ['showMiningGain', 'Mining', 'Mining stat gained today'],
+              ['showMiningGainPerT', 'Mine Stat/T', 'Your Mining stat gain per Awake used'],
+              ['showAwakeUsed', 'Awake', 'Amount of Awake spent mining today'],
+              ['showNetStatGain', 'Net Gain', 'Net stat gain from the current 10-trade band']
+          ];
+
+          const settings = loadSettings();
+
+          for (const [key, labelText, titleText] of labels) {
+              const label = create('label', 'hw-mining-log-settings-option');
+              assign(label, {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+              });
+              label.title = titleText;
+
+              const input = document.createElement('input');
+              input.type = 'checkbox';
+              input.checked = !!settings[key];
+              input.title = titleText;
+
+              input.addEventListener('change', () => {
+                  const next = loadSettings();
+                  next[key] = input.checked;
+                  saveSettings(next);
+              });
+
+              label.append(input, document.createTextNode(labelText));
+              body.append(label);
+          }
+
+          const fractionBlock = create('div', 'hw-mining-log-settings-fraction-block');
+          assign(fractionBlock, {
+              marginTop: '4px'
+          });
+
+          const fractionLabel = create('div', 'hw-mining-log-settings-fraction-label', 'Fraction Length:');
+          assign(fractionLabel, {
+              marginBottom: '3px'
+          });
+
+          const fractionChoices = create('div', 'hw-mining-log-settings-fraction-choices');
+          assign(fractionChoices, {
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '4px 10px',
+              paddingLeft: '18px'
+          });
+
+          for (const [value, labelText] of [
+              ['auto', 'Auto'],
+              ['1', '1'],
+              ['2', '2'],
+              ['3', '3'],
+              ['4', '4'],
+              ['5', '5']
+          ]) {
+              const choiceLabel = create('label', 'hw-mining-log-settings-fraction-choice');
+              assign(choiceLabel, {
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  cursor: 'pointer'
+              });
+
+              const radio = document.createElement('input');
+              radio.type = 'radio';
+              radio.name = 'hw-mining-log-fraction-length';
+              radio.value = value;
+              radio.checked = String(settings.fractionLength || 'auto') === value;
+
+              radio.addEventListener('change', () => {
+                  if (!radio.checked) return;
+                  const next = loadSettings();
+                  next.fractionLength = value;
+                  saveSettings(next);
+              });
+
+              choiceLabel.append(document.createTextNode(labelText), radio);
+              fractionChoices.append(choiceLabel);
+          }
+
+          fractionBlock.append(fractionLabel, fractionChoices);
+          body.append(fractionBlock);
+
+          dialog.append(head, body);
+          overlay.append(dialog);
+          document.body.append(overlay);
+
+          overlay.addEventListener('click', event => {
+              if (event.target === overlay) overlay.remove();
+          });
+      }
+
+      function removeHelperMiningLog() {
+          const headings = Array.from(contentArea.querySelectorAll('h3'));
+
+          for (const heading of headings) {
+              if (normalizeSpace(heading.textContent) !== 'Mining Log') continue;
+
+              const parent = heading.parentElement;
+              if (!parent) continue;
+
+              const style = String(parent.getAttribute('style') || '');
+
+              if (
+                  /max-width:\s*800px/i.test(style) &&
+                  /overflow-y:\s*auto/i.test(style)
+              ) {
+                  parent.remove();
+              }
+          }
+      }
+
+      function dayHasContent(day) {
+          return (
+              calcActualQty(day) > 0 ||
+              Number.isFinite(day.oreFound) ||
+              day.rescues.length > 0 ||
+              day.destroyed.length > 0 ||
+              day.miningGain > 0 ||
+              day.tUsed > 0 ||
+              day.oresTraded > 0 ||
+              day.blackOreTrades > 0
+          );
+      }
+
+      function calcActualQty(day) {
+          if (Number.isFinite(day && day.oreFound)) {
+              return day.oreFound;
+          }
+
+          // Historical/imported fallback when no native cumulative counter has
+          // yet been observed for that day.
+          return YIELD_ORDER.reduce(
+              (sum, name) => sum + Math.max(0, Number.parseInt(day.ores[name], 10) || 0),
+              0
+          );
+      }
+
+      function calcImpliedQty(day) {
+          const actual = calcActualQty(day);
+
+          if (Number.isFinite(day && day.shardsFound)) {
+              // Native Ore Found already counts each shard as one find.
+              // Implied quantity values each Hobalt Shard as three ore, so add
+              // two additional ore-equivalents per authoritative shard.
+              return actual + (day.shardsFound * 2);
+          }
+
+          // Historical/imported fallback based on observed composition.
+          const observedShards = Math.max(
+              0,
+              Number.parseInt(day && day.ores && day.ores['Hobalt Shard'], 10) || 0
+          );
+
+          return actual + (observedShards * 2);
+      }
+
+      function getHoboDateKey() {
+          const clock = document.getElementById('clock');
+          const parentText = normalizeSpace(clock && clock.parentElement
+              ? clock.parentElement.textContent
+              : '');
+
+          const dateMatch = parentText.match(
+              /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i
+          );
+
+          if (!dateMatch) return null;
+
+          const monthIndex = [
+              'jan','feb','mar','apr','may','jun',
+              'jul','aug','sep','oct','nov','dec'
+          ].indexOf(dateMatch[1].slice(0, 3).toLowerCase());
+
+          if (monthIndex < 0) return null;
+
+          const year = new Date().getFullYear();
+          const month = String(monthIndex + 1).padStart(2, '0');
+          const day = String(Number.parseInt(dateMatch[2], 10)).padStart(2, '0');
+
+          return `${year}-${month}-${day}`;
+      }
+
+      function makeFingerprint(date, counters, result) {
+          return [
+              date,
+              Number.isFinite(counters.tUsed) ? counters.tUsed : '',
+              Number.isFinite(counters.oresTraded) ? counters.oresTraded : '',
+              result.ores.map(o => `${o.name}:${o.count}`).join(','),
+              result.rescues.map(r => `${r.id}:${r.name}`).join(','),
+              result.destroyed.join(','),
+              Number.isFinite(result.miningGain) ? result.miningGain : ''
+          ].join('|');
+      }
+
+      function buildPlayerHref(id) {
+          const sr = new URLSearchParams(location.search).get('sr');
+          const prefix = sr && /^\d{1,3}$/.test(sr)
+              ? `/game/game.php?sr=${encodeURIComponent(sr)}`
+              : '/game/game.php?';
+
+          return sr && /^\d{1,3}$/.test(sr)
+              ? `${prefix}&cmd=player&ID=${encodeURIComponent(id)}`
+              : `${prefix}cmd=player&ID=${encodeURIComponent(id)}`;
+      }
+
+      function decodeEntities(value) {
+          const textarea = document.createElement('textarea');
+          textarea.innerHTML = String(value || '');
+          return textarea.value;
+      }
+
+      function normalizeSpace(value) {
+          return String(value || '').replace(/\s+/g, ' ').trim();
+      }
+
+      function escapeRegExp(value) {
+          return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+
+      function finiteOrZero(value) {
+          const n = Number(value);
+          return Number.isFinite(n) ? n : 0;
+      }
+
+      function finiteOrNull(value) {
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+      }
+
+      function formatInt(value) {
+          return Math.round(Number(value) || 0).toLocaleString();
+      }
+
+      function formatFractionValue(value, settings, calculated = false) {
+          const n = Number(value);
+          if (!Number.isFinite(n)) return '---';
+
+          const mode = String(settings && settings.fractionLength || 'auto');
+
+          if (/^[1-5]$/.test(mode)) {
+              return n.toFixed(Number(mode));
+          }
+
+          const presentationValue = calculated
+              ? roundFraction(n, 6)
+              : n;
+
+          return stripTrailingZeros(String(presentationValue));
+      }
+
+      function roundFraction(value, places) {
+          const factor = 10 ** places;
+          return Math.round((Number(value) + Number.EPSILON) * factor) / factor;
+      }
+
+      function stripTrailingZeros(value) {
+          const raw = String(value);
+          if (!raw.includes('.')) return raw;
+
+          return raw
+              .replace(/(\.\d*?[1-9])0+$/, '$1')
+              .replace(/\.0+$/, '');
+      }
+
+      function create(tag, className, text) {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+      }
+
+      function assign(node, styles) {
+          Object.assign(node.style, styles);
+          return node;
+      }
+  })();
+
 }
 
 if (document.readyState === 'loading') {
