@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.29
+// @version      2.30
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -3466,17 +3466,6 @@ function hw7RunDocumentEndModules() {
                 stroke-linecap="round"
               />
       
-              <!-- rear / left ear, drawn behind body so its base seam is hidden -->
-              <path
-                d="M61 18
-                   L64 5
-                   L76 16 Z"
-                fill="#f5a0c4"
-                stroke="#bb6d84"
-                stroke-width="2"
-                stroke-linejoin="round"
-              />
-      
               <!-- rear foot -->
               <path
                 d="M27 48
@@ -3510,6 +3499,21 @@ function hw7RunDocumentEndModules() {
                 fill="#f5a0c4"
                 stroke="#bb6d84"
                 stroke-width="2"
+              />
+              
+              <!-- left ear, drawn over body -->
+              <path
+                d="M61 18 L64 5 L76 16 Z"
+                fill="#f5a0c4"
+              />
+              
+              <path
+                d="M61 18 L64 5 L76 16"
+                fill="none"
+                stroke="#bb6d84"
+                stroke-width="2"
+                stroke-linejoin="round"
+                stroke-linecap="round"
               />
       
               <!-- soft body highlight -->
