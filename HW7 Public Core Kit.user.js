@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.32
+// @version      2.33
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2638,6 +2638,26 @@ function hw7RunDocumentEndModules() {
                   .mtt-active-miners-body tr:nth-child(2n+1) {
                       background: #9999cc22;
                   }
+
+                  @keyframes FocusedMiner {
+                      from {
+                          box-shadow: 0 0 0 0 #4844;
+                      }
+
+                      75% {
+                          box-shadow: 0 0 1px 4px #4844;
+                      }
+
+                      to {
+                          box-shadow: 0 0 1px 5px #44884406;
+                      }
+                  }
+
+                  .mtt-focused-miner {
+                      position: relative;
+                      z-index: 2;
+                      animation: FocusedMiner 1.6s alternate-reverse infinite;
+                  }
               `;
               document.head.appendChild(style);
           }
@@ -2715,7 +2735,8 @@ function hw7RunDocumentEndModules() {
                   return {
                       title,
                       x: coords.x,
-                      y: coords.y
+                      y: coords.y,
+                      cell
                   };
               })
               .filter(Boolean);
@@ -2788,8 +2809,14 @@ function hw7RunDocumentEndModules() {
               : null;
       }
 
+      let focusedMttMinerCell = null;
+      let pendingMttMinerReleaseCell = null;
+
       function buildMttActiveMinerRow(entry) {
           const row = document.createElement('tr');
+          const sourceCell = entry && entry.cell instanceof HTMLTableCellElement
+              ? entry.cell
+              : null;
 
           const identity = document.createElement('td');
           identity.style.cssText = [
@@ -2811,6 +2838,40 @@ function hw7RunDocumentEndModules() {
           coords.textContent = `(${entry.x},${entry.y})`;
 
           row.append(identity, coords);
+
+          if (sourceCell) {
+              row.addEventListener('mouseenter', () => {
+                  if (
+                      focusedMttMinerCell &&
+                      focusedMttMinerCell !== sourceCell
+                  ) {
+                      focusedMttMinerCell.classList.remove('mtt-focused-miner');
+                  }
+
+                  focusedMttMinerCell = sourceCell;
+                  pendingMttMinerReleaseCell = null;
+                  sourceCell.classList.add('mtt-focused-miner');
+              });
+
+              row.addEventListener('mouseleave', () => {
+                  if (focusedMttMinerCell === sourceCell) {
+                      pendingMttMinerReleaseCell = sourceCell;
+                  }
+              });
+
+              sourceCell.addEventListener('animationiteration', () => {
+                  if (pendingMttMinerReleaseCell !== sourceCell) return;
+
+                  sourceCell.classList.remove('mtt-focused-miner');
+
+                  if (focusedMttMinerCell === sourceCell) {
+                      focusedMttMinerCell = null;
+                  }
+
+                  pendingMttMinerReleaseCell = null;
+              });
+          }
+
           return row;
       }
 
