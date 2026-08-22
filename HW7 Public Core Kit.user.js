@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.18
+// @version      2.19
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -5846,6 +5846,7 @@ body div.content-wrap div.content-area {
           ledger.style.overflowY = 'auto';
           ledger.style.overflowX = 'hidden';
           ledger.style.scrollbarWidth = 'thin';
+          ledger.style.scrollbarGutter = 'stable';
           ledger.style.minHeight = '0';
 
           if (settings.mode === MTT_PANEL_MODES.CONTENT_END) {
@@ -6474,7 +6475,7 @@ body div.content-wrap div.content-area {
           dayWrap.appendChild(textNode(' TBS'));
           dayWrap.appendChild(sep(' > '));
           appendStatSpan(dayWrap, totals.life, '❤️', COLORS.life, 6, 0);
-          dayWrap.appendChild(sep(' | '));
+          dayWrap.appendChild(textNode(' '));
 
           const tradeCount = document.createElement('span');
           tradeCount.style.color = '#b8b8b8';
