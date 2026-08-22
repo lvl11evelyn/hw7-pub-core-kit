@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.31
+// @version      2.32
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2164,8 +2164,11 @@ function hw7RunDocumentEndModules() {
       const isTradePage =
         /[?&]do=trade(?:[&#]|$)/i.test(href);
 
-      const isBlastPage =
+      const hasBlastParam =
         /[?&]blast=(?:north|south|east|west)(?:[&#]|$)/i.test(href);
+
+      const isBlastPage =
+        hasBlastParam && !!document.querySelector('canvas');
 
       const isMineInterior =
         !isTradePage &&
@@ -6464,7 +6467,16 @@ body div.content-wrap div.content-area {
               stockPill.style.minWidth = '8%';
               stockPill.style.display = 'inline-block';
               stockPill.style.cursor = 'default';
-              stockPill.textContent = fmtStock(stock[code] || 0);
+
+              const rawStock = Number(stock && stock[code]);
+              const stockValue = Number.isFinite(rawStock) && rawStock >= 0
+                  ? rawStock
+                  : 0;
+              const displayValue = TRADE_ORES.includes(code)
+                  ? Math.floor(stockValue / 3)
+                  : stockValue;
+
+              stockPill.textContent = fmtStock(displayValue);
               wrap.appendChild(stockPill);
 
               if (idx < STOCK_ORDER.length - 1) wrap.appendChild(textNode(' '));
@@ -9543,8 +9555,11 @@ body div.content-wrap div.content-area {
       const params = new URLSearchParams(location.search);
       if (params.get('cmd') !== 'mines') return;
 
-      const isBlastPage =
+      const hasBlastParam =
           /[?&]blast=(?:north|south|east|west)(?:[&#]|$)/i.test(location.href);
+
+      const isBlastPage =
+          hasBlastParam && !!document.querySelector('canvas');
 
       const STORAGE = Object.freeze({
           log: 'hw_mining_log_test_v1',
