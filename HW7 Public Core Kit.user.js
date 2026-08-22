@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.30
+// @version      2.31
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -447,6 +447,31 @@ function hw7RunDocumentEndModules() {
 
     let jungleImportOpen = false;
     let jbetPlacementResizeBound = false;
+
+    let jbetContentResizeObserver = null;
+
+    function bindJbetPlacementResize() {
+        if (jbetPlacementResizeBound) return;
+        jbetPlacementResizeBound = true;
+    
+        const refreshPlacement = () => {
+            const panel = document.getElementById('jbgl-inline-wrap');
+            if (!panel) return;
+    
+            applyJbetPanelPlacement(panel);
+    
+            const dialog = document.getElementById('jbet-placement-dialog');
+            if (dialog) updateJbetPlacementDialogPreview(dialog);
+        };
+    
+        window.addEventListener('resize', refreshPlacement, { passive: true });
+    
+        const content = document.querySelector('.content-area');
+        if (content && typeof ResizeObserver === 'function') {
+            jbetContentResizeObserver = new ResizeObserver(refreshPlacement);
+            jbetContentResizeObserver.observe(content);
+        }
+    }
 
     const href = String(location.href || '');
     const isJungle = /[?&]cmd=more_jungle(?:[&#]|$|&)/i.test(href);
@@ -1341,20 +1366,6 @@ function hw7RunDocumentEndModules() {
       }
 
       return bounds;
-    }
-
-    function bindJbetPlacementResize() {
-      if (jbetPlacementResizeBound) return;
-      jbetPlacementResizeBound = true;
-
-      window.addEventListener('resize', () => {
-        const panel = document.getElementById('jbgl-inline-wrap');
-        if (!panel) return;
-        applyJbetPanelPlacement(panel);
-
-        const dialog = document.getElementById('jbet-placement-dialog');
-        if (dialog) updateJbetPlacementDialogPreview(dialog);
-      }, { passive: true });
     }
 
     function openJbetPlacementDialog(panel) {
