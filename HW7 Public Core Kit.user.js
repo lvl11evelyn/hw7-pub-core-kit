@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.26
+// @version      2.27
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -3404,11 +3404,37 @@ function hw7RunDocumentEndModules() {
 
       function buildHobaltShardIcon() {
           return `
-      <svg class="mtt-hobalt-shard" viewBox="0 0 32 64" aria-hidden="true">
-        <rect x="6" y="8" width="20" height="48" rx="6" fill="#1f7cff" stroke="#2450d8" stroke-width="4"/>
-        <path d="M10 18 L23 14 M9 28 L24 23 M9 38 L24 33 M10 48 L22 44" stroke="#47d7ff" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-    `;
+            <svg class="mtt-hobalt-shard" viewBox="0 0 32 64" aria-hidden="true">
+              <path
+                d="M13 4 L21 10 L23 25 L19 56 L10 47 L8 22 Z"
+                fill="#2da6ff"
+                stroke="#0b4f8a"
+                stroke-width="2.5"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14 9 L19 12 L20 24 L17 46 L11 40 L10 23 Z"
+                fill="#7fd0ff"
+                opacity=".75"
+              />
+              <path
+                d="M14 8 L18 13 L15 43"
+                fill="none"
+                stroke="#d8f4ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                opacity=".9"
+              />
+              <path
+                d="M19 13 L21 25 L18 51"
+                fill="none"
+                stroke="#0a3561"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                opacity=".4"
+              />
+            </svg>
+          `;
       }
 
       function buildHobaltChunkIcon() {
