@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.22
+// @version      2.23
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2185,7 +2185,6 @@ function hw7RunDocumentEndModules() {
       const K_PANEL_MODE = 'mtt_panel_mode_v1';
       const K_PANEL_ANCHOR = 'mtt_panel_anchor_v1';
       const K_MINE_INTERIOR_LAYOUT = 'mtt_mine_interior_layout_v1';
-      const K_CURRENT_PLAYER_ID = 'mtt_current_player_id_v1';
 
       const MAX_ROWS = 4650;
       const PANEL_WIDTH = 410;
@@ -2458,9 +2457,6 @@ function hw7RunDocumentEndModules() {
 
           if (!viewActiveLink) return;
 
-          const viewActiveHref = viewActiveLink.href;
-          const currentCoords = getMttTraversalCoords(traversalTable);
-          const currentPlayerId = resolveMttCurrentPlayerId(content);
 
           const grid = document.createElement('div');
           grid.id = 'mtt-mine-interior-grid';
@@ -2523,6 +2519,7 @@ function hw7RunDocumentEndModules() {
 
           const activeTable = buildMttActiveMinersTable(viewActiveLink);
           infoColumn.appendChild(activeTable);
+          populateMttActiveMinersFromMap(activeTable, mapTable);
 
           const statsBlock = buildMttNativeMiningStats(nativeStatsCenter);
           statsBlock.style.marginTop = 'auto';
@@ -2533,12 +2530,6 @@ function hw7RunDocumentEndModules() {
           outerTable.insertAdjacentElement('beforebegin', grid);
           outerTable.remove();
 
-          populateMttActiveMiners(
-              activeTable,
-              viewActiveHref,
-              currentPlayerId,
-              currentCoords
-          );
       }
 
       function normalizeMttMineMapGeometry(mapTable) {
@@ -2572,52 +2563,6 @@ function hw7RunDocumentEndModules() {
               cell.style.setProperty('box-sizing', 'border-box', 'important');
               cell.style.setProperty('padding', '0', 'important');
               cell.style.setProperty('line-height', '0', 'important');
-          }
-      }
-
-      function getMttTraversalCoords(traversalTable) {
-          const text = String(traversalTable?.textContent || '');
-          const match = text.match(/\b(\d+)\s*,\s*(\d+)\b/);
-
-          return match
-              ? { x: Number(match[1]), y: Number(match[2]) }
-              : null;
-      }
-
-      function resolveMttCurrentPlayerId(content) {
-          const outsideContent = Array.from(
-              document.querySelectorAll('a[href*="cmd=player"][href*="ID="]')
-          ).find(link => !link.closest('.content-area'));
-
-          const outsideId = getMttPlayerIdFromHref(
-              outsideContent && outsideContent.href
-          );
-
-          if (outsideId) {
-              GM_setValue(K_CURRENT_PLAYER_ID, outsideId);
-              return outsideId;
-          }
-
-          const stored = String(GM_getValue(K_CURRENT_PLAYER_ID, '') || '');
-          if (/^\d+$/.test(stored)) {
-              return stored;
-          }
-
-          // Result prose can contain links to other hobos, so links inside the
-          // Content Area are deliberately not used to establish self identity.
-          return '';
-      }
-
-      function getMttPlayerIdFromHref(hrefValue) {
-          if (!hrefValue) return '';
-
-          try {
-              const url = new URL(hrefValue, location.href);
-              const id = String(url.searchParams.get('ID') || '');
-              return /^\d+$/.test(id) ? id : '';
-          } catch {
-              const match = String(hrefValue).match(/[?&]ID=(\d+)/i);
-              return match ? match[1] : '';
           }
       }
 
@@ -2671,6 +2616,17 @@ function hw7RunDocumentEndModules() {
 
           const tbody = document.createElement('tbody');
           tbody.className = 'mtt-active-miners-body';
+
+          if (!document.getElementById('mtt-active-miners-style')) {
+              const style = document.createElement('style');
+              style.id = 'mtt-active-miners-style';
+              style.textContent = `
+                  .mtt-active-miners-body tr:nth-child(2n+1) {
+                      background: #9999cc22;
+                  }
+              `;
+              document.head.appendChild(style);
+          }
 
           table.append(thead, tbody);
           return table;
@@ -2729,138 +2685,93 @@ function hw7RunDocumentEndModules() {
           return String(value || '').replace(/\s+/g, ' ').trim();
       }
 
-      async function populateMttActiveMiners(
-          table,
-          href,
-          currentPlayerId,
-          currentCoords
-      ) {
+      function populateMttActiveMinersFromMap(table, mapTable) {
           const tbody = table && table.querySelector('.mtt-active-miners-body');
-          if (!tbody || !href) return;
+          if (!tbody || !mapTable) return;
 
-          try {
-              const response = await fetch(href, {
-                  credentials: 'same-origin',
-                  cache: 'no-store'
-              });
+          const playerTitlePattern = /^.+ \(\d{1,7}\)$/u;
+          const entries = Array.from(mapTable.querySelectorAll('td[title]'))
+              .map(cell => {
+                  const title = String(cell.getAttribute('title') || '').trim();
+                  if (!playerTitlePattern.test(title)) return null;
 
-              if (!response.ok) {
-                  throw new Error(`HTTP ${response.status}`);
-              }
+                  const coords = inferMttMinerCoordinate(cell, mapTable);
+                  if (!coords) return null;
 
-              const buffer = await response.arrayBuffer();
-              const contentType = String(
-                  response.headers.get('content-type') || ''
-              );
-              const charsetMatch = contentType.match(
-                  /charset\s*=\s*["']?([^;"'\s]+)/i
-              );
+                  return {
+                      title,
+                      x: coords.x,
+                      y: coords.y
+                  };
+              })
+              .filter(Boolean);
 
-              let charset = charsetMatch
-                  ? String(charsetMatch[1]).trim()
-                  : 'windows-1252';
-
-              if (/^(?:iso-8859-1|latin1|latin-1)$/i.test(charset)) {
-                  charset = 'windows-1252';
-              }
-
-              let html;
-
-              try {
-                  html = new TextDecoder(charset).decode(buffer);
-              } catch {
-                  html = new TextDecoder('windows-1252').decode(buffer);
-              }
-
-              const doc = new DOMParser().parseFromString(html, 'text/html');
-              const activeContent = doc.querySelector('.content-area');
-              if (!activeContent) {
-                  throw new Error('Active Mines content missing');
-              }
-
-              const sourceList = Array.from(activeContent.querySelectorAll('ul'))
-                  .find(list =>
-                      list.querySelector(
-                          'a[href*="cmd=player"][href*="ID="]'
-                      )
-                  );
-
-              if (!sourceList) {
-                  renderMttActiveMinersEmpty(tbody);
-                  return;
-              }
-
-              const parsed = Array.from(sourceList.children)
-                  .filter(node => node.tagName === 'LI')
-                  .map(parseMttActiveMinerLi)
-                  .filter(Boolean);
-
-              let fallbackSelfRemoved = false;
-
-              const others = parsed.filter(entry => {
-                  if (currentPlayerId && entry.id === currentPlayerId) {
-                      return false;
-                  }
-
-                  if (
-                      !currentPlayerId &&
-                      !fallbackSelfRemoved &&
-                      currentCoords &&
-                      entry.x === currentCoords.x &&
-                      entry.y === currentCoords.y
-                  ) {
-                      fallbackSelfRemoved = true;
-                      return false;
-                  }
-
-                  return true;
-              });
-
-              if (!others.length) {
-                  renderMttActiveMinersEmpty(tbody);
-                  return;
-              }
-
-              const fragment = document.createDocumentFragment();
-
-              for (const entry of others) {
-                  fragment.appendChild(buildMttActiveMinerRow(entry));
-              }
-
-              tbody.replaceChildren(fragment);
-          } catch {
-              const row = document.createElement('tr');
-              const cell = document.createElement('td');
-              cell.colSpan = 2;
-              cell.style.cssText = 'padding:4px 5px;text-align:center;';
-              const italic = document.createElement('i');
-              italic.textContent = 'Unable to load.';
-              cell.appendChild(italic);
-              row.appendChild(cell);
-              tbody.replaceChildren(row);
+          if (!entries.length) {
+              renderMttActiveMinersEmpty(tbody);
+              return;
           }
+
+          const fragment = document.createDocumentFragment();
+
+          for (const entry of entries) {
+              fragment.appendChild(buildMttActiveMinerRow(entry));
+          }
+
+          tbody.replaceChildren(fragment);
       }
 
-      function parseMttActiveMinerLi(li) {
-          const anchor = li.querySelector(
-              'a[href*="cmd=player"][href*="ID="]'
-          );
-          if (!anchor) return null;
+      function inferMttMinerCoordinate(cell, mapTable) {
+          const row = cell && cell.parentElement;
+          if (!row || !mapTable) return null;
 
-          const id = getMttPlayerIdFromHref(anchor.href);
-          if (!id) return null;
+          const cells = Array.from(row.cells || []);
+          const index = cells.indexOf(cell);
+          if (index < 0) return null;
 
-          const text = normalizeMttSpace(li.textContent || '');
-          const coords = text.match(/\bat\s+(\d+)\s*,\s*(\d+)\s*$/i);
+          const left = index > 0
+              ? parseMttMapCoordinateTitle(cells[index - 1])
+              : null;
+          const right = index < cells.length - 1
+              ? parseMttMapCoordinateTitle(cells[index + 1])
+              : null;
 
-          if (!coords) return null;
+          if (
+              left &&
+              right &&
+              left.y === right.y &&
+              right.x === left.x + 2
+          ) {
+              return { x: left.x + 1, y: left.y };
+          }
+
+          if (left) {
+              return { x: left.x + 1, y: left.y };
+          }
+
+          if (right) {
+              return { x: right.x - 1, y: right.y };
+          }
+
+          const rows = Array.from(mapTable.rows || []);
+          const rowIndex = rows.indexOf(row);
+
+          if (rowIndex < 0) return null;
 
           return {
-              id,
-              x: Number(coords[1]),
-              y: Number(coords[2]),
-              anchor: anchor.cloneNode(true)
+              x: index + 1,
+              y: rowIndex + 1
           };
+      }
+
+      function parseMttMapCoordinateTitle(cell) {
+          if (!cell) return null;
+
+          const title = String(cell.getAttribute('title') || '').trim();
+          const match = title.match(/^(\d+)\s*,\s*(\d+)$/);
+
+          return match
+              ? { x: Number(match[1]), y: Number(match[2]) }
+              : null;
       }
 
       function buildMttActiveMinerRow(entry) {
@@ -2875,9 +2786,7 @@ function hw7RunDocumentEndModules() {
               'overflow:hidden',
               'text-overflow:ellipsis'
           ].join(';');
-
-          identity.appendChild(entry.anchor);
-          identity.appendChild(document.createTextNode(` (${entry.id})`));
+          identity.textContent = entry.title;
 
           const coords = document.createElement('td');
           coords.style.cssText = [
