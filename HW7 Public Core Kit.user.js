@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.16
+// @version      2.17
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2461,9 +2461,9 @@ function hw7RunDocumentEndModules() {
           grid.className = 'mtt-mine-interior-grid';
           grid.style.cssText = [
               'display:grid',
-              'grid-template-columns:minmax(0,1fr) 250px minmax(0,1fr)',
+              'grid-template-columns:164px 250px minmax(0,1fr)',
               'align-items:stretch',
-              'column-gap:12px',
+              'column-gap:0',
               'width:100%',
               'box-sizing:border-box',
               'margin:0 0 8px'
@@ -2472,10 +2472,12 @@ function hw7RunDocumentEndModules() {
           const mapColumn = document.createElement('div');
           mapColumn.className = 'mtt-mine-map-column';
           mapColumn.style.cssText = [
-              'min-width:0',
+              'width:164px',
+              'min-width:164px',
+              'max-width:164px',
               'display:flex',
               'align-items:flex-start',
-              'justify-content:center'
+              'justify-content:flex-start'
           ].join(';');
 
           const traversalColumn = document.createElement('div');
@@ -2501,6 +2503,7 @@ function hw7RunDocumentEndModules() {
 
           // Move the native objects rather than recreating them.
           // Their internal traversal/map behavior remains entirely native.
+          normalizeMttMineMapGeometry(mapTable);
           mapColumn.appendChild(mapTable);
 
           const navForm = nativeLeft.querySelector('#nav_form');
@@ -2528,6 +2531,40 @@ function hw7RunDocumentEndModules() {
               currentPlayerId,
               currentCoords
           );
+      }
+
+      function normalizeMttMineMapGeometry(mapTable) {
+          if (!mapTable) return;
+
+          mapTable.setAttribute('cellspacing', '0');
+          mapTable.setAttribute('cellpadding', '0');
+
+          mapTable.style.setProperty('width', '164px', 'important');
+          mapTable.style.setProperty('height', '244px', 'important');
+          mapTable.style.setProperty('min-width', '164px', 'important');
+          mapTable.style.setProperty('max-width', '164px', 'important');
+          mapTable.style.setProperty('min-height', '244px', 'important');
+          mapTable.style.setProperty('max-height', '244px', 'important');
+          mapTable.style.setProperty('box-sizing', 'border-box', 'important');
+          mapTable.style.setProperty('table-layout', 'fixed', 'important');
+          mapTable.style.setProperty('border-collapse', 'separate', 'important');
+          mapTable.style.setProperty('border-spacing', '0', 'important');
+          mapTable.style.setProperty('border', '2px solid #000', 'important');
+          mapTable.style.setProperty('margin', '0', 'important');
+
+          for (const cell of mapTable.querySelectorAll('td')) {
+              cell.setAttribute('width', '8');
+              cell.setAttribute('height', '8');
+              cell.style.setProperty('width', '8px', 'important');
+              cell.style.setProperty('height', '8px', 'important');
+              cell.style.setProperty('min-width', '8px', 'important');
+              cell.style.setProperty('max-width', '8px', 'important');
+              cell.style.setProperty('min-height', '8px', 'important');
+              cell.style.setProperty('max-height', '8px', 'important');
+              cell.style.setProperty('box-sizing', 'border-box', 'important');
+              cell.style.setProperty('padding', '0', 'important');
+              cell.style.setProperty('line-height', '0', 'important');
+          }
       }
 
       function getMttTraversalCoords(traversalTable) {
@@ -2581,7 +2618,9 @@ function hw7RunDocumentEndModules() {
           table.className = 'mtt-active-miners-table';
           table.style.cssText = [
               'width:100%',
-              'max-width:320px',
+              'max-width:none',
+              'min-width:0',
+              'table-layout:fixed',
               'border-collapse:collapse',
               'border:1px solid #999',
               'font:11px/1.25 Arial,sans-serif',
@@ -2606,7 +2645,8 @@ function hw7RunDocumentEndModules() {
               'display:flex',
               'align-items:center',
               'justify-content:space-between',
-              'gap:8px'
+              'gap:8px',
+              'min-width:0'
           ].join(';');
 
           const title = document.createElement('span');
@@ -2700,7 +2740,30 @@ function hw7RunDocumentEndModules() {
                   throw new Error(`HTTP ${response.status}`);
               }
 
-              const html = await response.text();
+              const buffer = await response.arrayBuffer();
+              const contentType = String(
+                  response.headers.get('content-type') || ''
+              );
+              const charsetMatch = contentType.match(
+                  /charset\s*=\s*["']?([^;"'\s]+)/i
+              );
+
+              let charset = charsetMatch
+                  ? String(charsetMatch[1]).trim()
+                  : 'windows-1252';
+
+              if (/^(?:iso-8859-1|latin1|latin-1)$/i.test(charset)) {
+                  charset = 'windows-1252';
+              }
+
+              let html;
+
+              try {
+                  html = new TextDecoder(charset).decode(buffer);
+              } catch {
+                  html = new TextDecoder('windows-1252').decode(buffer);
+              }
+
               const doc = new DOMParser().parseFromString(html, 'text/html');
               const activeContent = doc.querySelector('.content-area');
               if (!activeContent) {
