@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.14
+// @version      2.16
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -970,7 +970,7 @@ function hw7RunDocumentEndModules() {
       const body = document.createElement('div');
       body.className = 'jbgl-scroll-body';
       body.style.boxSizing = 'border-box';
-      body.style.maxHeight = '118px';
+      body.style.maxHeight = '240px';
       body.style.overflowY = 'auto';
       body.style.padding = '2px 3px 2px 5px';
 
@@ -1002,7 +1002,7 @@ function hw7RunDocumentEndModules() {
       footer.id = 'jbgl-footer';
       footer.style.boxSizing = 'border-box';
       footer.style.width = '100%';
-      footer.style.background = 'rgba(0,0,0,0.95)';
+      footer.style.background = 'rgba(45,45,45,0.95)';
       footer.style.border = '1px solid #2f2f2f';
       footer.style.borderTop = '0';
       footer.style.padding = '4px 6px';
@@ -1028,6 +1028,44 @@ function hw7RunDocumentEndModules() {
       controls.style.border = '1px solid #2f2f2f';
       controls.style.borderTop = '0';
       controls.style.borderRadius = '0 0 3px 3px';
+
+      function makeBulkToggleBtn() {
+        const hourKeys = orderedHourKeys(rows, state);
+        const collapsedMap = loadCollapsedHours();
+        const activeHourKey = currentHourKey(rows);
+
+        const anyExpanded = hourKeys.some(hourKey =>
+          !isHourCollapsed(hourKey, activeHourKey, collapsedMap)
+        );
+
+        const btn = document.createElement('a');
+        btn.href = '#';
+        btn.className = 'btn light-blue hover-green';
+        btn.textContent = anyExpanded ? '[-] All' : '[+] All';
+        btn.style.display = 'inline-flex';
+        btn.style.alignItems = 'center';
+        btn.style.justifyContent = 'center';
+        btn.style.height = '22px';
+        btn.style.whiteSpace = 'nowrap';
+        btn.style.fontSize = '11px';
+        btn.style.fontFamily = 'Consolas, monospace';
+        btn.style.padding = '4px 8px';
+
+        btn.addEventListener('click', event => {
+          event.preventDefault();
+
+          const next = loadCollapsedHours();
+
+          for (const hourKey of hourKeys) {
+            next[hourKey] = anyExpanded;
+          }
+
+          saveCollapsedHours(next);
+          render(rows, state);
+        });
+
+        return btn;
+      }
 
       function makeBtn(label) {
         const btn = document.createElement('a');
@@ -1071,11 +1109,15 @@ function hw7RunDocumentEndModules() {
         render(rows, state);
       });
 
-      controls.append(exportBtn, clearBtn, importToggle);
+      const bulkToggleBtn = makeBulkToggleBtn();
+
+      controls.append(exportBtn, clearBtn, importToggle, bulkToggleBtn);
       box.append(headerWrap, body);
       inlineWrap.append(box, footer, controls);
 
       applyJbetPanelPlacement(inlineWrap);
+      updateJbetSeparators(body);
+      bindJbetSeparatorResize(body);
       bindJbetPlacementResize();
     }
 
@@ -1188,7 +1230,7 @@ function hw7RunDocumentEndModules() {
       if (scrollBody) {
         scrollBody.style.flex = '';
         scrollBody.style.minHeight = '';
-        scrollBody.style.maxHeight = '118px';
+        scrollBody.style.maxHeight = '240px';
       }
 
       const leaveJungleLink = Array.from(host.querySelectorAll('a')).find(link =>
@@ -1753,14 +1795,36 @@ function hw7RunDocumentEndModules() {
 
     function makeSeparator() {
       const row = document.createElement('div');
-      row.style.whiteSpace = 'pre';
+      row.className = 'jbgl-hour-separator';
+      row.style.whiteSpace = 'nowrap';
+      row.style.overflow = 'hidden';
       row.style.color = '#a98';
-      row.style.letterSpacing = '-0.3em';
       row.style.textAlign = 'center';
       row.style.lineHeight = '.6';
       row.style.textDecorationColor = '#d8c8b888';
-      row.textContent = '  ⪽⫘⫘⫘⪾  '.repeat(5);
       return row;
+    }
+
+    function updateJbetSeparators(body) {
+      if (!body) return;
+
+      const unit = '- - - - ';
+      const repeatCount = Math.max(1, Math.floor(body.clientWidth / 48.5));
+      const value = unit.repeat(repeatCount).trimEnd();
+
+      for (const separator of body.querySelectorAll('.jbgl-hour-separator')) {
+        separator.textContent = value;
+      }
+    }
+
+    function bindJbetSeparatorResize(body) {
+      if (!body || body.dataset.jbglSeparatorResizeBound === '1') return;
+      body.dataset.jbglSeparatorResizeBound = '1';
+
+      if (typeof ResizeObserver !== 'function') return;
+
+      const observer = new ResizeObserver(() => updateJbetSeparators(body));
+      observer.observe(body);
     }
 
     function styleJbetGridRow(row) {
@@ -1930,7 +1994,10 @@ function hw7RunDocumentEndModules() {
 
     function makeFooterTotalsRow(label, totals) {
       const row = styleJbetGridRow(document.createElement('div'));
-      row.appendChild(makeJbetLabelCell(label));
+      const labelCell = makeJbetLabelCell(label);
+      const labelValue = labelCell.firstElementChild;
+      if (labelValue) labelValue.style.margin = '0 15px 0 auto';
+      row.appendChild(labelCell);
 
       const cols = ['str', 'pow', 'spd', 'mlg', 't'];
       cols.forEach(key => {
@@ -2116,6 +2183,8 @@ function hw7RunDocumentEndModules() {
       const K_TOPBAR_LAST_TRADE = `mtt_topbar_last_trade_bridge_v1`;
       const K_PANEL_MODE = 'mtt_panel_mode_v1';
       const K_PANEL_ANCHOR = 'mtt_panel_anchor_v1';
+      const K_MINE_INTERIOR_LAYOUT = 'mtt_mine_interior_layout_v1';
+      const K_CURRENT_PLAYER_ID = 'mtt_current_player_id_v1';
 
       const MAX_ROWS = 4650;
       const PANEL_WIDTH = 410;
@@ -2123,6 +2192,11 @@ function hw7RunDocumentEndModules() {
       const MTT_PANEL_MODES = Object.freeze({
           FIXED: 'fixed',
           CONTENT_END: 'content-end'
+      });
+
+      const MTT_MINE_INTERIOR_LAYOUTS = Object.freeze({
+          NATIVE: 'native',
+          THREE_COLUMN: 'three-column'
       });
 
       const MTT_PANEL_ANCHORS = Object.freeze([
@@ -2281,6 +2355,7 @@ function hw7RunDocumentEndModules() {
       };
 
       maybeRecordSnapshot(snapshot);
+      applyMttMineInteriorLayout();
       render(snapshot, rows, state);
       renderTradingPostBalance(snapshot);
       renderDepotTradeCards(snapshot);
@@ -2309,6 +2384,455 @@ function hw7RunDocumentEndModules() {
               location.assign(url.href);
 
           }, true);
+      }
+
+      function applyMttMineInteriorLayout() {
+          if (!isMineInterior) return;
+          if (
+              loadMttMineInteriorLayout() !==
+              MTT_MINE_INTERIOR_LAYOUTS.THREE_COLUMN
+          ) {
+              return;
+          }
+
+          const content = document.querySelector('.content-area');
+          if (!content || document.getElementById('mtt-mine-interior-grid')) {
+              return;
+          }
+
+          const outerTable = Array.from(
+              content.querySelectorAll(':scope > table[width="100%"]')
+          ).find(table => {
+              const row = table.rows && table.rows[0];
+              if (!row || row.cells.length < 2) return false;
+
+              return !!row.cells[0].querySelector(
+                  'table[align="center"][width="250"]'
+              );
+          });
+
+          if (!outerTable) return;
+
+          const outerRow = outerTable.rows && outerTable.rows[0];
+          if (!outerRow || outerRow.cells.length < 2) return;
+
+          const nativeLeft = outerRow.cells[0];
+          const nativeRight = outerRow.cells[1];
+
+          const traversalTable = nativeLeft.querySelector(
+              'table[align="center"][width="250"]'
+          );
+          if (!traversalTable) return;
+
+          const mapTable = Array.from(nativeRight.querySelectorAll('table'))
+              .find(table => {
+                  const cell = table.querySelector(
+                      'td[title][width="6"][height="6"], td[title="You!"]'
+                  );
+                  return !!cell;
+              });
+
+          if (!mapTable) return;
+
+          const nativeStatsCenter = Array.from(
+              nativeRight.querySelectorAll('center')
+          ).find(center =>
+              /\bMining\s*:/i.test(center.textContent || '') &&
+              /\bOre found\s*:/i.test(center.textContent || '') &&
+              /\bT used\s*:/i.test(center.textContent || '')
+          );
+
+          if (!nativeStatsCenter) return;
+
+          const viewActiveLink = Array.from(
+              nativeStatsCenter.querySelectorAll('a[href]')
+          ).find(link =>
+              /\bView Active\b/i.test(link.textContent || '')
+          );
+
+          if (!viewActiveLink) return;
+
+          const viewActiveHref = viewActiveLink.href;
+          const currentCoords = getMttTraversalCoords(traversalTable);
+          const currentPlayerId = resolveMttCurrentPlayerId(content);
+
+          const grid = document.createElement('div');
+          grid.id = 'mtt-mine-interior-grid';
+          grid.className = 'mtt-mine-interior-grid';
+          grid.style.cssText = [
+              'display:grid',
+              'grid-template-columns:minmax(0,1fr) 250px minmax(0,1fr)',
+              'align-items:stretch',
+              'column-gap:12px',
+              'width:100%',
+              'box-sizing:border-box',
+              'margin:0 0 8px'
+          ].join(';');
+
+          const mapColumn = document.createElement('div');
+          mapColumn.className = 'mtt-mine-map-column';
+          mapColumn.style.cssText = [
+              'min-width:0',
+              'display:flex',
+              'align-items:flex-start',
+              'justify-content:center'
+          ].join(';');
+
+          const traversalColumn = document.createElement('div');
+          traversalColumn.className = 'mtt-mine-traversal-column';
+          traversalColumn.style.cssText = [
+              'width:250px',
+              'min-width:250px',
+              'max-width:250px',
+              'display:flex',
+              'flex-direction:column',
+              'align-items:center'
+          ].join(';');
+
+          const infoColumn = document.createElement('div');
+          infoColumn.className = 'mtt-mine-info-column';
+          infoColumn.style.cssText = [
+              'min-width:0',
+              'display:flex',
+              'flex-direction:column',
+              'align-items:center',
+              'align-self:stretch'
+          ].join(';');
+
+          // Move the native objects rather than recreating them.
+          // Their internal traversal/map behavior remains entirely native.
+          mapColumn.appendChild(mapTable);
+
+          const navForm = nativeLeft.querySelector('#nav_form');
+          if (navForm) {
+              traversalColumn.appendChild(navForm);
+          }
+
+          traversalColumn.appendChild(traversalTable);
+
+          const activeTable = buildMttActiveMinersTable(viewActiveLink);
+          infoColumn.appendChild(activeTable);
+
+          const statsBlock = buildMttNativeMiningStats(nativeStatsCenter);
+          statsBlock.style.marginTop = 'auto';
+          statsBlock.style.padding = '18px 0 22px';
+          infoColumn.appendChild(statsBlock);
+
+          grid.append(mapColumn, traversalColumn, infoColumn);
+          outerTable.insertAdjacentElement('beforebegin', grid);
+          outerTable.remove();
+
+          populateMttActiveMiners(
+              activeTable,
+              viewActiveHref,
+              currentPlayerId,
+              currentCoords
+          );
+      }
+
+      function getMttTraversalCoords(traversalTable) {
+          const text = String(traversalTable?.textContent || '');
+          const match = text.match(/\b(\d+)\s*,\s*(\d+)\b/);
+
+          return match
+              ? { x: Number(match[1]), y: Number(match[2]) }
+              : null;
+      }
+
+      function resolveMttCurrentPlayerId(content) {
+          const outsideContent = Array.from(
+              document.querySelectorAll('a[href*="cmd=player"][href*="ID="]')
+          ).find(link => !link.closest('.content-area'));
+
+          const outsideId = getMttPlayerIdFromHref(
+              outsideContent && outsideContent.href
+          );
+
+          if (outsideId) {
+              GM_setValue(K_CURRENT_PLAYER_ID, outsideId);
+              return outsideId;
+          }
+
+          const stored = String(GM_getValue(K_CURRENT_PLAYER_ID, '') || '');
+          if (/^\d+$/.test(stored)) {
+              return stored;
+          }
+
+          // Result prose can contain links to other hobos, so links inside the
+          // Content Area are deliberately not used to establish self identity.
+          return '';
+      }
+
+      function getMttPlayerIdFromHref(hrefValue) {
+          if (!hrefValue) return '';
+
+          try {
+              const url = new URL(hrefValue, location.href);
+              const id = String(url.searchParams.get('ID') || '');
+              return /^\d+$/.test(id) ? id : '';
+          } catch {
+              const match = String(hrefValue).match(/[?&]ID=(\d+)/i);
+              return match ? match[1] : '';
+          }
+      }
+
+      function buildMttActiveMinersTable(viewActiveLink) {
+          const table = document.createElement('table');
+          table.className = 'mtt-active-miners-table';
+          table.style.cssText = [
+              'width:100%',
+              'max-width:320px',
+              'border-collapse:collapse',
+              'border:1px solid #999',
+              'font:11px/1.25 Arial,sans-serif',
+              'background:#fff',
+              'color:#111'
+          ].join(';');
+
+          const thead = document.createElement('thead');
+          const headRow = document.createElement('tr');
+          const headCell = document.createElement('th');
+          headCell.colSpan = 2;
+          headCell.style.cssText = [
+              'padding:3px 5px',
+              'border-bottom:1px solid #999',
+              'background:#ccc',
+              'text-align:left',
+              'font-size:12px'
+          ].join(';');
+
+          const headWrap = document.createElement('div');
+          headWrap.style.cssText = [
+              'display:flex',
+              'align-items:center',
+              'justify-content:space-between',
+              'gap:8px'
+          ].join(';');
+
+          const title = document.createElement('span');
+          title.textContent = 'Active Miners';
+
+          // Keep the native command trigger itself.
+          viewActiveLink.remove();
+          viewActiveLink.style.whiteSpace = 'nowrap';
+
+          headWrap.append(title, viewActiveLink);
+          headCell.appendChild(headWrap);
+          headRow.appendChild(headCell);
+          thead.appendChild(headRow);
+
+          const tbody = document.createElement('tbody');
+          tbody.className = 'mtt-active-miners-body';
+
+          table.append(thead, tbody);
+          return table;
+      }
+
+      function buildMttNativeMiningStats(nativeStatsCenter) {
+          const block = document.createElement('div');
+          block.className = 'mtt-native-mining-stats';
+          block.style.cssText = [
+              'font:12px/1.35 Arial,sans-serif',
+              'text-align:center',
+              'white-space:nowrap'
+          ].join(';');
+
+          const lines = splitMttNativeCenterLines(nativeStatsCenter);
+          const wanted = lines.filter(nodes => {
+              const text = normalizeMttSpace(
+                  nodes.map(node => node.textContent || '').join(' ')
+              );
+
+              return /^(?:Mining|Ore found|Ore traded|T used)\s*:/i.test(text);
+          });
+
+          wanted.forEach((nodes, index) => {
+              for (const node of nodes) {
+                  block.appendChild(node.cloneNode(true));
+              }
+
+              if (index < wanted.length - 1) {
+                  block.appendChild(document.createElement('br'));
+              }
+          });
+
+          return block;
+      }
+
+      function splitMttNativeCenterLines(center) {
+          const lines = [];
+          let current = [];
+
+          for (const node of Array.from(center.childNodes)) {
+              if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
+                  lines.push(current);
+                  current = [];
+                  continue;
+              }
+
+              current.push(node);
+          }
+
+          if (current.length) lines.push(current);
+          return lines;
+      }
+
+      function normalizeMttSpace(value) {
+          return String(value || '').replace(/\s+/g, ' ').trim();
+      }
+
+      async function populateMttActiveMiners(
+          table,
+          href,
+          currentPlayerId,
+          currentCoords
+      ) {
+          const tbody = table && table.querySelector('.mtt-active-miners-body');
+          if (!tbody || !href) return;
+
+          try {
+              const response = await fetch(href, {
+                  credentials: 'same-origin',
+                  cache: 'no-store'
+              });
+
+              if (!response.ok) {
+                  throw new Error(`HTTP ${response.status}`);
+              }
+
+              const html = await response.text();
+              const doc = new DOMParser().parseFromString(html, 'text/html');
+              const activeContent = doc.querySelector('.content-area');
+              if (!activeContent) {
+                  throw new Error('Active Mines content missing');
+              }
+
+              const sourceList = Array.from(activeContent.querySelectorAll('ul'))
+                  .find(list =>
+                      list.querySelector(
+                          'a[href*="cmd=player"][href*="ID="]'
+                      )
+                  );
+
+              if (!sourceList) {
+                  renderMttActiveMinersEmpty(tbody);
+                  return;
+              }
+
+              const parsed = Array.from(sourceList.children)
+                  .filter(node => node.tagName === 'LI')
+                  .map(parseMttActiveMinerLi)
+                  .filter(Boolean);
+
+              let fallbackSelfRemoved = false;
+
+              const others = parsed.filter(entry => {
+                  if (currentPlayerId && entry.id === currentPlayerId) {
+                      return false;
+                  }
+
+                  if (
+                      !currentPlayerId &&
+                      !fallbackSelfRemoved &&
+                      currentCoords &&
+                      entry.x === currentCoords.x &&
+                      entry.y === currentCoords.y
+                  ) {
+                      fallbackSelfRemoved = true;
+                      return false;
+                  }
+
+                  return true;
+              });
+
+              if (!others.length) {
+                  renderMttActiveMinersEmpty(tbody);
+                  return;
+              }
+
+              const fragment = document.createDocumentFragment();
+
+              for (const entry of others) {
+                  fragment.appendChild(buildMttActiveMinerRow(entry));
+              }
+
+              tbody.replaceChildren(fragment);
+          } catch {
+              const row = document.createElement('tr');
+              const cell = document.createElement('td');
+              cell.colSpan = 2;
+              cell.style.cssText = 'padding:4px 5px;text-align:center;';
+              const italic = document.createElement('i');
+              italic.textContent = 'Unable to load.';
+              cell.appendChild(italic);
+              row.appendChild(cell);
+              tbody.replaceChildren(row);
+          }
+      }
+
+      function parseMttActiveMinerLi(li) {
+          const anchor = li.querySelector(
+              'a[href*="cmd=player"][href*="ID="]'
+          );
+          if (!anchor) return null;
+
+          const id = getMttPlayerIdFromHref(anchor.href);
+          if (!id) return null;
+
+          const text = normalizeMttSpace(li.textContent || '');
+          const coords = text.match(/\bat\s+(\d+)\s*,\s*(\d+)\s*$/i);
+
+          if (!coords) return null;
+
+          return {
+              id,
+              x: Number(coords[1]),
+              y: Number(coords[2]),
+              anchor: anchor.cloneNode(true)
+          };
+      }
+
+      function buildMttActiveMinerRow(entry) {
+          const row = document.createElement('tr');
+
+          const identity = document.createElement('td');
+          identity.style.cssText = [
+              'padding:2px 4px',
+              'border-bottom:1px solid #bbb',
+              'text-align:left',
+              'white-space:nowrap',
+              'overflow:hidden',
+              'text-overflow:ellipsis'
+          ].join(';');
+
+          identity.appendChild(entry.anchor);
+          identity.appendChild(document.createTextNode(` (${entry.id})`));
+
+          const coords = document.createElement('td');
+          coords.style.cssText = [
+              'padding:2px 4px',
+              'border-bottom:1px solid #bbb',
+              'text-align:right',
+              'white-space:nowrap'
+          ].join(';');
+          coords.textContent = `(${entry.x},${entry.y})`;
+
+          row.append(identity, coords);
+          return row;
+      }
+
+      function renderMttActiveMinersEmpty(tbody) {
+          const row = document.createElement('tr');
+          const cell = document.createElement('td');
+          cell.colSpan = 2;
+          cell.style.cssText = 'padding:4px 5px;text-align:center;';
+
+          const italic = document.createElement('i');
+          italic.textContent = 'No activity.';
+
+          cell.appendChild(italic);
+          row.appendChild(cell);
+          tbody.replaceChildren(row);
       }
 
       function renderDepotTradeCards(s) {
@@ -4757,9 +5281,17 @@ body div.content-wrap div.content-area {
 
       function renderBalanceSourceLine(balance) {
           const div = document.createElement('div');
-          div.style.fontSize = '15px';
+          div.style.display = 'flex';
+          div.style.alignItems = 'center';
+          div.style.justifyContent = 'space-between';
+          div.style.gap = '12px';
+          div.style.fontSize = '12px';
           div.style.lineHeight = '1.25';
           div.style.marginTop = '3px';
+
+          const swim = document.createElement('span');
+          const trade = document.createElement('span');
+
           const swimParts = [
               ['SPD', balance.swim.spd, SOURCE_COLORS.spd, 2],
               ['POW', balance.swim.pow, SOURCE_COLORS.pow, 2],
@@ -4768,15 +5300,15 @@ body div.content-wrap div.content-area {
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
           if (swimParts.length > 0) {
-              div.appendChild(textNode('Swim Δ < '));
+              swim.appendChild(textNode('Swim < '));
 
               swimParts.forEach(([label, value, color, decimals], index) => {
                   if (index > 0) {
-                      div.appendChild(textNode(' | '));
+                      swim.appendChild(textNode(' | '));
                   }
 
                   appendBalancePart(
-                      div,
+                      swim,
                       value,
                       label,
                       color,
@@ -4784,20 +5316,26 @@ body div.content-wrap div.content-area {
                   );
               });
 
-              div.appendChild(textNode(' > | '));
+              swim.appendChild(textNode(' >'));
           }
 
-          div.appendChild(textNode('Trade Δ < '));
-          appendBalancePart(div, balance.trade.spd, 'SPD', SOURCE_COLORS.spd, 2);
-          div.appendChild(textNode(' | '));
-          appendBalancePart(div, balance.trade.pow, 'POW', SOURCE_COLORS.pow, 2);
-          div.appendChild(textNode(' | '));
-          appendBalancePart(div, balance.trade.str, 'STR', SOURCE_COLORS.str, 2);
+          trade.appendChild(textNode('Trade < '));
+          appendBalancePart(trade, balance.trade.spd, 'SPD', SOURCE_COLORS.spd, 2);
+          trade.appendChild(textNode(' | '));
+          appendBalancePart(trade, balance.trade.pow, 'POW', SOURCE_COLORS.pow, 2);
+          trade.appendChild(textNode(' | '));
+          appendBalancePart(trade, balance.trade.str, 'STR', SOURCE_COLORS.str, 2);
           if (Math.abs(Number(balance.trade.life) || 0) > 0.000001) {
-              div.appendChild(textNode(' | '));
-              appendBalancePart(div, balance.trade.life, 'Life', SOURCE_COLORS.life, 0);
+              trade.appendChild(textNode(' | '));
+              appendBalancePart(trade, balance.trade.life, 'Life', SOURCE_COLORS.life, 0);
           }
-          div.appendChild(textNode(' >'));
+          trade.appendChild(textNode(' >'));
+
+          if (swimParts.length > 0) {
+              div.appendChild(swim);
+          }
+          div.appendChild(trade);
+
           return div;
       }
 
@@ -4858,8 +5396,8 @@ body div.content-wrap div.content-area {
               const settingsBtn = document.createElement('button');
               settingsBtn.type = 'button';
               settingsBtn.textContent = '⚙';
-              settingsBtn.title = 'Mines panel placement';
-              settingsBtn.setAttribute('aria-label', 'Mines panel placement');
+              settingsBtn.title = 'Mines settings';
+              settingsBtn.setAttribute('aria-label', 'Mines settings');
               settingsBtn.style.cssText = [
                   'display:inline-flex',
                   'align-items:center',
@@ -4917,6 +5455,28 @@ body div.content-wrap div.content-area {
 
           panel.replaceChildren(legend, body);
           updateMttLedgerGeometry(panel, loadMttPanelPlacement(), measureMttPlacementBounds());
+      }
+
+      function loadMttMineInteriorLayout() {
+          const raw = String(
+              GM_getValue(
+                  K_MINE_INTERIOR_LAYOUT,
+                  MTT_MINE_INTERIOR_LAYOUTS.THREE_COLUMN
+              ) || ''
+          );
+
+          return raw === MTT_MINE_INTERIOR_LAYOUTS.NATIVE
+              ? MTT_MINE_INTERIOR_LAYOUTS.NATIVE
+              : MTT_MINE_INTERIOR_LAYOUTS.THREE_COLUMN;
+      }
+
+      function saveMttMineInteriorLayout(value) {
+          const next = value === MTT_MINE_INTERIOR_LAYOUTS.NATIVE
+              ? MTT_MINE_INTERIOR_LAYOUTS.NATIVE
+              : MTT_MINE_INTERIOR_LAYOUTS.THREE_COLUMN;
+
+          GM_setValue(K_MINE_INTERIOR_LAYOUT, next);
+          return next;
       }
 
       function loadMttPanelPlacement() {
@@ -5286,7 +5846,7 @@ body div.content-wrap div.content-area {
           heading.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:bold;font-size:13px;';
 
           const title = document.createElement('span');
-          title.textContent = 'Mines Panel Placement';
+          title.textContent = 'Mines Settings';
 
           const close = document.createElement('button');
           close.type = 'button';
@@ -5319,6 +5879,60 @@ body div.content-wrap div.content-area {
           fixedLabel.append(fixedRadio, document.createTextNode(' Fixed Place'));
 
           modeRow.append(contentLabel, fixedLabel);
+
+          const mineLayoutRow = document.createElement('div');
+          mineLayoutRow.style.cssText = [
+              'display:flex',
+              'gap:18px',
+              'align-items:center',
+              'justify-content:center',
+              'margin:3px 0 10px',
+              'font-size:11px'
+          ].join(';');
+          mineLayoutRow.title = 'Applies on the next Mines page load.';
+
+          const mineLayoutLabel = document.createElement('strong');
+          mineLayoutLabel.textContent = 'Mines Interior Layout:';
+
+          const mineLayout = loadMttMineInteriorLayout();
+
+          const nativeLayoutLabel = document.createElement('label');
+          const nativeLayoutRadio = document.createElement('input');
+          nativeLayoutRadio.type = 'radio';
+          nativeLayoutRadio.name = 'mtt-mine-interior-layout';
+          nativeLayoutRadio.value = MTT_MINE_INTERIOR_LAYOUTS.NATIVE;
+          nativeLayoutRadio.checked =
+              mineLayout === MTT_MINE_INTERIOR_LAYOUTS.NATIVE;
+          nativeLayoutLabel.append(
+              nativeLayoutRadio,
+              document.createTextNode(' Native 2-column')
+          );
+
+          const threeLayoutLabel = document.createElement('label');
+          const threeLayoutRadio = document.createElement('input');
+          threeLayoutRadio.type = 'radio';
+          threeLayoutRadio.name = 'mtt-mine-interior-layout';
+          threeLayoutRadio.value = MTT_MINE_INTERIOR_LAYOUTS.THREE_COLUMN;
+          threeLayoutRadio.checked =
+              mineLayout === MTT_MINE_INTERIOR_LAYOUTS.THREE_COLUMN;
+          threeLayoutLabel.append(
+              threeLayoutRadio,
+              document.createTextNode(' 3-column')
+          );
+
+          const onMineLayoutChange = event => {
+              if (!event.target.checked) return;
+              saveMttMineInteriorLayout(event.target.value);
+          };
+
+          nativeLayoutRadio.addEventListener('change', onMineLayoutChange);
+          threeLayoutRadio.addEventListener('change', onMineLayoutChange);
+
+          mineLayoutRow.append(
+              mineLayoutLabel,
+              nativeLayoutLabel,
+              threeLayoutLabel
+          );
 
           const preview = document.createElement('div');
           preview.className = 'mtt-placement-preview';
@@ -5407,7 +6021,7 @@ body div.content-wrap div.content-area {
           contentRadio.addEventListener('change', onModeChange);
           fixedRadio.addEventListener('change', onModeChange);
 
-          dialog.append(heading, modeRow, preview, detail);
+          dialog.append(heading, modeRow, mineLayoutRow, preview, detail);
           overlay.appendChild(dialog);
           document.body.appendChild(overlay);
 
@@ -5779,8 +6393,9 @@ body div.content-wrap div.content-area {
           appendStatSpan(dayWrap, totals.str, '', COLORS.str, 5, 0);
           dayWrap.appendChild(sep(' < '));
           appendStatSpan(dayWrap, totals.tbs, '', COLORS.tbs, 5, 0);
-          dayWrap.appendChild(textNode(' TBS > '));
-          appendStatSpan(dayWrap, totals.life, 'Life', COLORS.life, 6, 0);
+          dayWrap.appendChild(textNode(' TBS'));
+          dayWrap.appendChild(sep(' > '));
+          appendStatSpan(dayWrap, totals.life, '❤️', COLORS.life, 6, 0);
           dayWrap.appendChild(sep(' | '));
 
           const tradeCount = document.createElement('span');
@@ -8482,7 +9097,7 @@ body div.content-wrap div.content-area {
 /* The Future: participate in the native topbar flow, just as CSMP does. */
 #hwtbs-suite-panel.hwtbs-layout-future {
   position: static;
-  margin: 0;
+  margin: 0 0 0 5px;
   padding: 0;
   vertical-align: top;
 }
@@ -8536,13 +9151,14 @@ body div.content-wrap div.content-area {
 
 .hwtbs-line,
 #hwtbs-roll-panel .hwtbs-roll-line {
-  height: 17px;
+  height: 21px;
   min-width: 0;
   padding: 0 3px;
   border-bottom: 1px solid rgba(0,0,0,.2);
   background: #fafafa;
   overflow: hidden;
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .hwtbs-line {
@@ -8579,11 +9195,8 @@ body div.content-wrap div.content-area {
 }
 
 #hwtbs-roll-panel .hwtbs-roll-line {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  line-height: 17px;
-  text-align: center;
+  line-height: 21px;
+  padding: 0 8px;
 }
 
 .hwtbs-roll-min,
