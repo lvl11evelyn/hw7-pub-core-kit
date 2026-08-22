@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.17
+// @version      2.18
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2463,7 +2463,7 @@ function hw7RunDocumentEndModules() {
               'display:grid',
               'grid-template-columns:164px 250px minmax(0,1fr)',
               'align-items:stretch',
-              'column-gap:0',
+              'column-gap:6px',
               'width:100%',
               'box-sizing:border-box',
               'margin:0 0 8px'
@@ -2477,7 +2477,8 @@ function hw7RunDocumentEndModules() {
               'max-width:164px',
               'display:flex',
               'align-items:flex-start',
-              'justify-content:flex-start'
+              'justify-content:flex-start',
+              'margin-top:12px'
           ].join(';');
 
           const traversalColumn = document.createElement('div');
@@ -2498,7 +2499,8 @@ function hw7RunDocumentEndModules() {
               'display:flex',
               'flex-direction:column',
               'align-items:center',
-              'align-self:stretch'
+              'align-self:stretch',
+              'margin-top:12px'
           ].join(';');
 
           // Move the native objects rather than recreating them.
@@ -5730,7 +5732,20 @@ body div.content-wrap div.content-area {
 
           resetMttPanelPlacementStyles(panel);
 
+          const legend = panel.querySelector(':scope > legend');
+
+          if (legend) {
+              legend.style.margin = 'auto';
+              legend.style.bottom = '8px';
+              legend.style.display = 'inline-flex';
+          }
+
           if (settings.mode === MTT_PANEL_MODES.CONTENT_END) {
+              if (legend) {
+                  legend.style.margin = '0 5px 0 auto';
+                  legend.style.bottom = '9px';
+                  legend.style.display = 'flex';
+              }
               panel.style.position = 'static';
               panel.style.width = '100%';
               panel.style.maxWidth = '100%';
@@ -5843,7 +5858,7 @@ body div.content-wrap div.content-area {
 
               const inlineMax = Math.max(
                   180,
-                  Math.min(360, Math.floor(referenceHeight * 0.42))
+                  Math.min(320, Math.floor(referenceHeight * 0.42))
               );
 
               ledger.style.flex = '0 1 auto';
