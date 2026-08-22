@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.27
+// @version      2.28
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -3452,31 +3452,155 @@ function hw7RunDocumentEndModules() {
 
       function buildBeggingPiggyIcon() {
           return `
-      <svg class="mtt-begging-piggy" viewBox="0 0 96 62" aria-hidden="true">
-        <path d="M24 44 L19 56 H27 L31 47 Z" fill="#f5a0c4" stroke="#bb6d84" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M48 48 L46 59 H55 L56 49 Z" fill="#f5a0c4" stroke="#bb6d84" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M72 43 L76 55 H84 L78 43 Z" fill="#f5a0c4" stroke="#bb6d84" stroke-width="2" stroke-linejoin="round"/>
-
-        <path d="M36 12 L44 2 L50 15 Z" fill="#f5a0c4" stroke="#bb6d84" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M70 11 L83 5 L78 22 Z" fill="#f5a0c4" stroke="#bb6d84" stroke-width="2" stroke-linejoin="round"/>
-
-        <path d="M19 27 C8 20 8 33 14 30 C18 28 18 22 13 23" fill="none" stroke="#bb6d84" stroke-width="3" stroke-linecap="round"/>
-
-        <path d="M17 34
-                 C17 17 34 8 55 10
-                 C76 12 89 23 87 37
-                 C85 51 67 57 44 55
-                 C27 54 17 46 17 34 Z"
-              fill="#f5a0c4" stroke="#bb6d84" stroke-width="2" stroke-linejoin="round"/>
-
-        <ellipse cx="80" cy="36" rx="13" ry="8" fill="#f7b0cc" stroke="#bb6d84" stroke-width="1.5"/>
-        <circle cx="76" cy="36" r="1.4" fill="#7a3f4b"/>
-        <circle cx="84" cy="36" r="1.4" fill="#7a3f4b"/>
-
-        <circle cx="62" cy="25" r="3.2" fill="#111111"/>
-        <circle cx="78" cy="26" r="3.2" fill="#111111"/>
-      </svg>
-    `;
+            <svg class="mtt-begging-piggy" viewBox="0 0 96 62" aria-hidden="true">
+      
+              <!-- curled tail -->
+              <path
+                d="M18 31
+                   C7 23 6 36 14 35
+                   C20 34 20 27 15 27
+                   C11 27 11 31 14 32"
+                fill="none"
+                stroke="#bb6d84"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
+      
+              <!-- rear foot -->
+              <path
+                d="M27 48
+                   C25 52 24 56 25 58
+                   L34 58
+                   C35 55 35 52 34 49 Z"
+                fill="#e88daf"
+                stroke="#bb6d84"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+      
+              <!-- front foot -->
+              <path
+                d="M66 48
+                   C66 52 67 56 69 58
+                   L78 58
+                   C78 54 77 51 75 48 Z"
+                fill="#e88daf"
+                stroke="#bb6d84"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+      
+              <!-- main spherical bank body -->
+              <ellipse
+                cx="50"
+                cy="34"
+                rx="34"
+                ry="23"
+                fill="#f5a0c4"
+                stroke="#bb6d84"
+                stroke-width="2"
+              />
+      
+              <!-- soft body highlight -->
+              <path
+                d="M27 23
+                   C36 14 52 12 64 17"
+                fill="none"
+                stroke="#ffd1e3"
+                stroke-width="3"
+                stroke-linecap="round"
+                opacity=".8"
+              />
+      
+              <!-- coin slot -->
+              <path
+                d="M43 12
+                   C49 10 56 10 62 12"
+                fill="none"
+                stroke="#7a3f4b"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
+      
+              <!-- rear ear -->
+              <path
+                d="M64 16
+                   L72 7
+                   L76 20 Z"
+                fill="#f5a0c4"
+                stroke="#bb6d84"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+      
+              <!-- front ear -->
+              <path
+                d="M73 19
+                   L84 11
+                   L83 25 Z"
+                fill="#f5a0c4"
+                stroke="#bb6d84"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+      
+              <!-- snout -->
+              <ellipse
+                cx="81"
+                cy="36"
+                rx="12"
+                ry="8"
+                fill="#f7b0cc"
+                stroke="#bb6d84"
+                stroke-width="2"
+              />
+      
+              <!-- nostrils -->
+              <ellipse
+                cx="77"
+                cy="36"
+                rx="1.5"
+                ry="2"
+                fill="#7a3f4b"
+              />
+              <ellipse
+                cx="85"
+                cy="36"
+                rx="1.5"
+                ry="2"
+                fill="#7a3f4b"
+              />
+      
+              <!-- eyes -->
+              <circle
+                cx="65"
+                cy="27"
+                r="2.6"
+                fill="#111111"
+              />
+              <circle
+                cx="77"
+                cy="27"
+                r="2.6"
+                fill="#111111"
+              />
+      
+              <!-- tiny eye highlights -->
+              <circle
+                cx="64.2"
+                cy="26.2"
+                r=".7"
+                fill="#ffffff"
+              />
+              <circle
+                cx="76.2"
+                cy="26.2"
+                r=".7"
+                fill="#ffffff"
+              />
+      
+            </svg>
+          `;
       }
 
       function buildTradeArrowIcon() {
