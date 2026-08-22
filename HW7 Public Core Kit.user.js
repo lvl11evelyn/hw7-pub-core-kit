@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.20
+// @version      2.21
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -5352,7 +5352,8 @@ body div.content-wrap div.content-area {
           div.style.gap = '12px';
           div.style.fontSize = '12px';
           div.style.lineHeight = '1.25';
-          div.style.marginTop = '3px';
+          div.style.margin = '3px auto 0';
+          div.style.maxWidth = 'calc(100% - 12px)';
 
           const swim = document.createElement('span');
           const trade = document.createElement('span');
@@ -6448,13 +6449,13 @@ body div.content-wrap div.content-area {
       function renderTradeDayHeader(day, collapsed, s, rows, state, balance) {
           const dayWrap = document.createElement('div');
           dayWrap.className = 'mtt-trade-day-header';
-          dayWrap.style.margin = '2px -3px 0';
-          dayWrap.style.padding = '0 0 0 5px';
-          dayWrap.style.lineHeight = '22px';
+          dayWrap.style.margin = '2px 0 0';
+          dayWrap.style.padding = '0 1px';
+          dayWrap.style.lineHeight = '20px';
           dayWrap.style.borderTop = '1px solid rgba(255,255,255,.28)';
           dayWrap.style.borderBottom = '1px solid rgba(255,255,255,.14)';
           dayWrap.style.cursor = 'default';
-          dayWrap.style.fontSize = '13px';
+          dayWrap.style.fontSize = '12px';
 
           const totals = balance && balance.net ? balance.net : day.totals;
           const sep = text => {
@@ -6470,15 +6471,16 @@ body div.content-wrap div.content-area {
           appendStatSpan(dayWrap, totals.pow, '', COLORS.pow, 5, 0);
           dayWrap.appendChild(sep('| '));
           appendStatSpan(dayWrap, totals.str, '', COLORS.str, 5, 0);
-          dayWrap.appendChild(sep('< '));
+          dayWrap.appendChild(sep('<'));
           appendStatSpan(dayWrap, totals.tbs, '', COLORS.tbs, 5, 0);
           dayWrap.appendChild(textNode(' TBS'));
-          dayWrap.appendChild(sep(' >'));
+          dayWrap.appendChild(sep('>'));
           appendStatSpan(dayWrap, totals.life, '❤️', COLORS.life, 6, 0);
           dayWrap.appendChild(textNode(' '));
 
           const tradeCount = document.createElement('span');
           tradeCount.style.color = '#b8b8b8';
+          tradeCount.style.fontSize = '11px';
           tradeCount.textContent = `Trades ${fmtInt(day.count, 3)}`;
           dayWrap.appendChild(tradeCount);
 
