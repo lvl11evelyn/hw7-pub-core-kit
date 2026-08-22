@@ -5846,7 +5846,7 @@ body div.content-wrap div.content-area {
           ledger.style.overflowY = 'auto';
           ledger.style.overflowX = 'hidden';
           ledger.style.scrollbarWidth = 'thin';
-          ledger.style.scrollbarGutter = 'stable';
+          ledger.style.paddingRight = '12px';
           ledger.style.minHeight = '0';
 
           if (settings.mode === MTT_PANEL_MODES.CONTENT_END) {
@@ -6466,14 +6466,14 @@ body div.content-wrap div.content-area {
 
           dayWrap.appendChild(textNode(`${String(Number.parseInt(day.dayKey, 10)).padStart(2, ' ')}: `));
           appendStatSpan(dayWrap, totals.spd, '', COLORS.spd, 5, 0);
-          dayWrap.appendChild(sep(' | '));
+          dayWrap.appendChild(sep('| '));
           appendStatSpan(dayWrap, totals.pow, '', COLORS.pow, 5, 0);
-          dayWrap.appendChild(sep(' | '));
+          dayWrap.appendChild(sep('| '));
           appendStatSpan(dayWrap, totals.str, '', COLORS.str, 5, 0);
-          dayWrap.appendChild(sep(' < '));
+          dayWrap.appendChild(sep('< '));
           appendStatSpan(dayWrap, totals.tbs, '', COLORS.tbs, 5, 0);
           dayWrap.appendChild(textNode(' TBS'));
-          dayWrap.appendChild(sep(' > '));
+          dayWrap.appendChild(sep(' >'));
           appendStatSpan(dayWrap, totals.life, '❤️', COLORS.life, 6, 0);
           dayWrap.appendChild(textNode(' '));
 
