@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.21
+// @version      2.22
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2180,6 +2180,7 @@ function hw7RunDocumentEndModules() {
       const K_HOBALT_COLLAPSED = `mtt_hobalt_collapsed_schema_${STORAGE_SCHEMA}`;
       const K_BL_COLLAPSED = `mtt_collapsed_bl_schema_${STORAGE_SCHEMA}`;
       const K_MINE_DAY_LOG = `mtt_mine_day_log_schema_${STORAGE_SCHEMA}`;
+      const K_MINING_LOG = 'hw_mining_log_test_v1';
       const K_TOPBAR_LAST_TRADE = `mtt_topbar_last_trade_bridge_v1`;
       const K_PANEL_MODE = 'mtt_panel_mode_v1';
       const K_PANEL_ANCHOR = 'mtt_panel_anchor_v1';
@@ -2311,6 +2312,10 @@ function hw7RunDocumentEndModules() {
           persistedTradePost,
           stock
       );
+      const depotNetStatGain = isTradePage
+          ? parseNativeNetStatGain()
+          : null;
+      persistMiningLogTradeStatGain(depotNetStatGain);
       const completedTrade = parseCompletedTradeResult();
       publishTopbarLastTrade(completedTrade, summary);
       const tradeLedger = updateAndLoadTradeLedger(completedTrade, tradePost);
@@ -2341,6 +2346,7 @@ function hw7RunDocumentEndModules() {
           ),
           stock,
           tradePost,
+          depotNetStatGain,
           completedTrade,
           tradeLedger,
           tradeRecon,
@@ -3050,10 +3056,6 @@ function hw7RunDocumentEndModules() {
           const foot = document.createElement('div');
           foot.className = 'mtt-trade-card-foot';
 
-          const net = document.createElement('span');
-          net.className = 'mtt-trade-net';
-          net.textContent = `NET ${fmtSigned(row.tbsNet, 5)}`;
-
           const remaining = document.createElement('span');
           remaining.className = 'mtt-trade-rem';
 
@@ -3063,7 +3065,6 @@ function hw7RunDocumentEndModules() {
               remaining.textContent = active ? 'ready' : 'locked';
           }
 
-          foot.appendChild(net);
           foot.appendChild(remaining);
 
           card.appendChild(iconWrap);
@@ -3210,7 +3211,9 @@ function hw7RunDocumentEndModules() {
           box.id = 'mtt-trade-meta';
           box.className = 'mtt-trade-meta';
 
-          const net = parseNativeNetStatGain();
+          const net = Number.isFinite(s && s.depotNetStatGain)
+          ? s.depotNetStatGain
+          : null;
           const tradesToday = Number.isFinite(Number(s && s.tradePost && s.tradePost.tradesToday))
           ? Number(s.tradePost.tradesToday)
           : null;
@@ -3234,6 +3237,67 @@ function hw7RunDocumentEndModules() {
           const raw = content ? (content.textContent || '') : visibleText;
           const m = normalizeSpace(raw).match(/Net stat gain for trade\s*:\s*([+-]?[0-9]+(?:\.[0-9]+)?)/i);
           return m ? parseFloat(m[1]) : null;
+      }
+
+      function persistMiningLogTradeStatGain(value) {
+          if (!isTradePage || !Number.isFinite(value)) return false;
+
+          const date = getMiningLogDateKey();
+          if (!date) return false;
+
+          let log;
+
+          try {
+              const raw = localStorage.getItem(K_MINING_LOG);
+              const parsed = raw ? JSON.parse(raw) : {};
+              log = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                  ? parsed
+                  : {};
+          } catch {
+              log = {};
+          }
+
+          const existing = log[date] && typeof log[date] === 'object'
+              ? log[date]
+              : {};
+
+          log[date] = {
+              ...existing,
+              tradeStatGain: value
+          };
+
+          try {
+              localStorage.setItem(K_MINING_LOG, JSON.stringify(log));
+              return true;
+          } catch {
+              return false;
+          }
+      }
+
+      function getMiningLogDateKey() {
+          const clockNode = document.getElementById('clock');
+          const parentText = normalizeSpace(clockNode && clockNode.parentElement
+              ? clockNode.parentElement.textContent
+              : '');
+
+          const dateMatch = parentText.match(
+              /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i
+          );
+
+          if (!dateMatch) return null;
+
+          const monthIndex = [
+              'jan','feb','mar','apr','may','jun',
+              'jul','aug','sep','oct','nov','dec'
+          ].indexOf(dateMatch[1].slice(0, 3).toLowerCase());
+
+          if (monthIndex < 0) return null;
+
+          const year = new Date().getFullYear();
+          const month = String(monthIndex + 1).padStart(2, '0');
+          const day = String(Number.parseInt(dateMatch[2], 10)).padStart(2, '0');
+
+          return `${year}-${month}-${day}`;
       }
 
       function buildMttTradeShardSection(s, nativeHrefMap) {
@@ -8277,6 +8341,10 @@ body div.content-wrap div.content-area {
                     white-space: nowrap;
                   }
 
+                  #mtt-depot-trade .mtt-trade-core-card .mtt-trade-card-foot {
+                    justify-content: flex-end;
+                  }
+
                   #mtt-depot-trade .mtt-trade-net {
                     color: #cccccc;
                   }
@@ -10198,7 +10266,15 @@ body div.content-wrap div.content-area {
                           ? metricDescriptor('Awake', `${formatInt(day.tUsed)}T`, '', 'hw-mining-log-metric-awake-used', 'Amount of Awake spent mining today')
                           : null,
                       settings.showNetStatGain
-                          ? metricDescriptor('Net Gain', formatFractionValue(day.tradeStatGain, settings), '', 'hw-mining-log-metric-net-stat', 'Net stat gain from the current 10-trade band')
+                          ? metricDescriptor(
+                              'Net Gain',
+                              Number.isFinite(day.tradeStatGain)
+                                  ? formatFractionValue(day.tradeStatGain, settings)
+                                  : '--.-----',
+                              '',
+                              'hw-mining-log-metric-net-stat',
+                              'Net stat gain from the current 10-trade band'
+                          )
                           : null
                   ].filter(Boolean)
               },
