@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.23
+// @version      2.24
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2573,7 +2573,7 @@ function hw7RunDocumentEndModules() {
               'width:100%',
               'max-width:none',
               'min-width:0',
-              'table-layout:fixed',
+              'table-layout:auto',
               'border-collapse:collapse',
               'border:1px solid #999',
               'font:11px/1.25 Arial,sans-serif',
@@ -2782,9 +2782,7 @@ function hw7RunDocumentEndModules() {
               'padding:2px 4px',
               'border-bottom:1px solid #bbb',
               'text-align:left',
-              'white-space:nowrap',
-              'overflow:hidden',
-              'text-overflow:ellipsis'
+              'white-space:nowrap'
           ].join(';');
           identity.textContent = entry.title;
 
@@ -2793,7 +2791,8 @@ function hw7RunDocumentEndModules() {
               'padding:2px 4px',
               'border-bottom:1px solid #bbb',
               'text-align:right',
-              'white-space:nowrap'
+              'white-space:nowrap',
+              'width:1%'
           ].join(';');
           coords.textContent = `(${entry.x},${entry.y})`;
 
