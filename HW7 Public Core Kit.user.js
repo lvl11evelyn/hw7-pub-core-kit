@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.25
+// @version      2.26
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -3415,7 +3415,7 @@ function hw7RunDocumentEndModules() {
           return `
       <img
         class="mtt-hobalt-chunk-img"
-        src="https://i.imgur.com/gDOSjBL.png"
+        src="https://i.imgur.com/yBCeWDv.png"
         alt="Hobalt Chunk"
         width="30"
         height="30"
