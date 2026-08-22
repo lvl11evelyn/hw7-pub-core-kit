@@ -8,6 +8,7 @@ Public distribution repository for the HW1 Core Kit, a unified HoboWars userscri
 - Jungle Berry Event Tracker
 - Mines Telemetry Tracker
 - Topbar Total Battle Stats
+- Mining Log
 
 ## Installation
 
