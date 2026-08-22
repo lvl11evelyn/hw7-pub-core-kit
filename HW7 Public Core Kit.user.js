@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.28
+// @version      2.29
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -3466,6 +3466,17 @@ function hw7RunDocumentEndModules() {
                 stroke-linecap="round"
               />
       
+              <!-- rear / left ear, drawn behind body so its base seam is hidden -->
+              <path
+                d="M61 18
+                   L64 5
+                   L76 16 Z"
+                fill="#f5a0c4"
+                stroke="#bb6d84"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+      
               <!-- rear foot -->
               <path
                 d="M27 48
@@ -3490,7 +3501,7 @@ function hw7RunDocumentEndModules() {
                 stroke-linejoin="round"
               />
       
-              <!-- main spherical bank body -->
+              <!-- main body -->
               <ellipse
                 cx="50"
                 cy="34"
@@ -3522,18 +3533,7 @@ function hw7RunDocumentEndModules() {
                 stroke-linecap="round"
               />
       
-              <!-- rear ear -->
-              <path
-                d="M64 16
-                   L72 7
-                   L76 20 Z"
-                fill="#f5a0c4"
-                stroke="#bb6d84"
-                stroke-width="2"
-                stroke-linejoin="round"
-              />
-      
-              <!-- front ear -->
+              <!-- front / right ear -->
               <path
                 d="M73 19
                    L84 11
@@ -3556,48 +3556,16 @@ function hw7RunDocumentEndModules() {
               />
       
               <!-- nostrils -->
-              <ellipse
-                cx="77"
-                cy="36"
-                rx="1.5"
-                ry="2"
-                fill="#7a3f4b"
-              />
-              <ellipse
-                cx="85"
-                cy="36"
-                rx="1.5"
-                ry="2"
-                fill="#7a3f4b"
-              />
+              <ellipse cx="77" cy="36" rx="1.5" ry="2" fill="#7a3f4b" />
+              <ellipse cx="85" cy="36" rx="1.5" ry="2" fill="#7a3f4b" />
       
               <!-- eyes -->
-              <circle
-                cx="65"
-                cy="27"
-                r="2.6"
-                fill="#111111"
-              />
-              <circle
-                cx="77"
-                cy="27"
-                r="2.6"
-                fill="#111111"
-              />
+              <circle cx="65" cy="27" r="2.6" fill="#111111" />
+              <circle cx="77" cy="27" r="2.6" fill="#111111" />
       
-              <!-- tiny eye highlights -->
-              <circle
-                cx="64.2"
-                cy="26.2"
-                r=".7"
-                fill="#ffffff"
-              />
-              <circle
-                cx="76.2"
-                cy="26.2"
-                r=".7"
-                fill="#ffffff"
-              />
+              <!-- eye highlights -->
+              <circle cx="64.2" cy="26.2" r=".7" fill="#ffffff" />
+              <circle cx="76.2" cy="26.2" r=".7" fill="#ffffff" />
       
             </svg>
           `;
