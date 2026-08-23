@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.37
+// @version      2.38
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -7065,7 +7065,7 @@ body div.content-wrap div.content-area {
               'top:calc(100% - 59px)',
               'box-sizing:border-box',
               'z-index:2',
-              'background-color:#111111',
+              'background-color:#444444',
               'border-top:2px solid #111111',
               'display:flex',
               'justify-content:space-between',
@@ -7092,7 +7092,7 @@ body div.content-wrap div.content-area {
           const exportBtn = document.createElement('button');
           exportBtn.textContent = 'EXPORT';
           exportBtn.style.margin = '3px 2% 0';
-          exportBtn.style.padding = '1px 2px';
+          exportBtn.style.padding = '3px 12px';
           exportBtn.addEventListener('click', () => {
               exportMines(s, rows);
           });
@@ -7100,7 +7100,7 @@ body div.content-wrap div.content-area {
           const importBtn = document.createElement('button');
           importBtn.textContent = 'IMPORT';
           importBtn.style.margin = '3px 2% 0 0';
-          importBtn.style.padding = '1px 2px';
+          importBtn.style.padding = '3px 12px';
           importBtn.addEventListener('click', () => {
               openImportBox(s, rows);
           });
@@ -7109,7 +7109,7 @@ body div.content-wrap div.content-area {
           swimBtn.textContent = 'SWIM⇢▤';
           swimBtn.title = 'Import a Jungle export for the Trading Post.';
           swimBtn.style.margin = '3px 2% 0 0';
-          swimBtn.style.padding = '0 2px';
+          swimBtn.style.padding = '3px 12px';
           swimBtn.addEventListener('click', () => {
               openSwimImportBox(s, rows);
           });
@@ -7119,7 +7119,7 @@ body div.content-wrap div.content-area {
           clearBtn.style.color = '#e80000';
           clearBtn.style.fontWeight = 'bold';
           clearBtn.style.margin = '3px 2% 0 6%';
-          clearBtn.style.padding = '1px 2px';
+          clearBtn.style.padding = '3px 6px';
           clearBtn.style.cursor = 'not-allowed';
           clearBtn.addEventListener('click', () => {
               if (!confirm('Clear the trade ledger?')) return;
