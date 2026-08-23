@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.35
+// @version      2.36
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2204,6 +2204,7 @@ function hw7RunDocumentEndModules() {
       const K_PANEL_MODE = 'mtt_panel_mode_v1';
       const K_PANEL_ANCHOR = 'mtt_panel_anchor_v1';
       const K_MINE_INTERIOR_LAYOUT = 'mtt_mine_interior_layout_v1';
+      const K_PINNED_MINERS_SESSION = 'mtt_pinned_miners_session_v1';
 
       const MAX_ROWS = 4650;
       const PANEL_WIDTH = 410;
@@ -2852,6 +2853,52 @@ function hw7RunDocumentEndModules() {
               : null;
       }
 
+      function loadMttPinnedMinerTitles() {
+          try {
+              const raw = sessionStorage.getItem(K_PINNED_MINERS_SESSION);
+              const parsed = raw ? JSON.parse(raw) : [];
+              return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+          } catch {
+              return new Set();
+          }
+      }
+
+      function saveMttPinnedMinerTitles(titles) {
+          try {
+              const values = Array.from(titles || []).map(String);
+
+              if (values.length) {
+                  sessionStorage.setItem(
+                      K_PINNED_MINERS_SESSION,
+                      JSON.stringify(values)
+                  );
+              } else {
+                  sessionStorage.removeItem(K_PINNED_MINERS_SESSION);
+              }
+
+              return true;
+          } catch {
+              return false;
+          }
+      }
+
+      function setMttMinerPinned(title, cell, pinned) {
+          const key = String(title || '').trim();
+          if (!key || !cell) return false;
+
+          const titles = loadMttPinnedMinerTitles();
+
+          if (pinned) {
+              titles.add(key);
+          } else {
+              titles.delete(key);
+          }
+
+          cell.classList.toggle('mtt-pinned-miner', pinned);
+          saveMttPinnedMinerTitles(titles);
+          return pinned;
+      }
+
       function buildMttActiveMinerRow(entry) {
           const row = document.createElement('tr');
           const sourceCell = entry && entry.cell;
@@ -2876,6 +2923,12 @@ function hw7RunDocumentEndModules() {
           coords.textContent = `(${entry.x},${entry.y})`;
 
           if (sourceCell) {
+              const pinnedTitles = loadMttPinnedMinerTitles();
+              sourceCell.classList.toggle(
+                  'mtt-pinned-miner',
+                  pinnedTitles.has(String(entry.title || '').trim())
+              );
+
               row.addEventListener('mouseenter', () => {
                   focusMttMinerCell(sourceCell);
               });
@@ -2885,7 +2938,8 @@ function hw7RunDocumentEndModules() {
               });
 
               row.addEventListener('click', () => {
-                  sourceCell.classList.toggle('mtt-pinned-miner');
+                  const pinned = !sourceCell.classList.contains('mtt-pinned-miner');
+                  setMttMinerPinned(entry.title, sourceCell, pinned);
               });
 
               sourceCell.addEventListener(
