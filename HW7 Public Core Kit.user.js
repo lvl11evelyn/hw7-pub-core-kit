@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.33
+// @version      2.34
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2167,8 +2167,13 @@ function hw7RunDocumentEndModules() {
       const hasBlastParam =
         /[?&]blast=(?:north|south|east|west)(?:[&#]|$)/i.test(href);
 
+      // A blast URL can legitimately remain in place after the blast interface
+      // has closed (for example, when another miner's rockslide returns this
+      // player to the Mines interior). Treat it as an active Blast page only
+      // while the native Blast canvas is actually rendered.
       const isBlastPage =
-        hasBlastParam && !!document.querySelector('canvas');
+        hasBlastParam &&
+        !!document.querySelector('.content-area canvas');
 
       const isMineInterior =
         !isTradePage &&
@@ -2231,6 +2236,8 @@ function hw7RunDocumentEndModules() {
       });
 
       let mttPlacementResizeBound = false;
+      let focusedMttMinerCell = null;
+      let pendingMttMinerReleaseCell = null;
 
       const ORE_IDS = {
           228: 'Ch',
@@ -2641,22 +2648,22 @@ function hw7RunDocumentEndModules() {
 
                   @keyframes FocusedMiner {
                       from {
-                          box-shadow: 0 0 0 0 #4844;
+                          box-shadow: 0 0 0 0 #4b44;
                       }
 
                       75% {
-                          box-shadow: 0 0 1px 4px #4844;
+                          box-shadow: 0 0 1px 4px #4b44;
                       }
 
                       to {
-                          box-shadow: 0 0 1px 5px #44884406;
+                          box-shadow: 0 0 1px 5px #44bb440b;
                       }
                   }
 
                   .mtt-focused-miner {
                       position: relative;
                       z-index: 2;
-                      animation: FocusedMiner 1.6s alternate-reverse infinite;
+                      animation: FocusedMiner 1.2s alternate-reverse infinite;
                   }
               `;
               document.head.appendChild(style);
@@ -2809,14 +2816,9 @@ function hw7RunDocumentEndModules() {
               : null;
       }
 
-      let focusedMttMinerCell = null;
-      let pendingMttMinerReleaseCell = null;
-
       function buildMttActiveMinerRow(entry) {
           const row = document.createElement('tr');
-          const sourceCell = entry && entry.cell instanceof HTMLTableCellElement
-              ? entry.cell
-              : null;
+          const sourceCell = entry && entry.cell;
 
           const identity = document.createElement('td');
           identity.style.cssText = [
@@ -2837,42 +2839,54 @@ function hw7RunDocumentEndModules() {
           ].join(';');
           coords.textContent = `(${entry.x},${entry.y})`;
 
-          row.append(identity, coords);
-
           if (sourceCell) {
               row.addEventListener('mouseenter', () => {
-                  if (
-                      focusedMttMinerCell &&
-                      focusedMttMinerCell !== sourceCell
-                  ) {
-                      focusedMttMinerCell.classList.remove('mtt-focused-miner');
-                  }
-
-                  focusedMttMinerCell = sourceCell;
-                  pendingMttMinerReleaseCell = null;
-                  sourceCell.classList.add('mtt-focused-miner');
+                  focusMttMinerCell(sourceCell);
               });
 
               row.addEventListener('mouseleave', () => {
-                  if (focusedMttMinerCell === sourceCell) {
-                      pendingMttMinerReleaseCell = sourceCell;
-                  }
+                  releaseMttMinerCellAtBoundary(sourceCell);
               });
 
-              sourceCell.addEventListener('animationiteration', () => {
-                  if (pendingMttMinerReleaseCell !== sourceCell) return;
-
-                  sourceCell.classList.remove('mtt-focused-miner');
-
-                  if (focusedMttMinerCell === sourceCell) {
-                      focusedMttMinerCell = null;
-                  }
-
-                  pendingMttMinerReleaseCell = null;
-              });
+              sourceCell.addEventListener(
+                  'animationiteration',
+                  handleMttMinerAnimationIteration
+              );
           }
 
+          row.append(identity, coords);
           return row;
+      }
+
+      function focusMttMinerCell(cell) {
+          if (!cell) return;
+
+          if (focusedMttMinerCell && focusedMttMinerCell !== cell) {
+              focusedMttMinerCell.classList.remove('mtt-focused-miner');
+          }
+
+          pendingMttMinerReleaseCell = null;
+          focusedMttMinerCell = cell;
+          cell.classList.add('mtt-focused-miner');
+      }
+
+      function releaseMttMinerCellAtBoundary(cell) {
+          if (!cell || cell !== focusedMttMinerCell) return;
+          pendingMttMinerReleaseCell = cell;
+      }
+
+      function handleMttMinerAnimationIteration(event) {
+          const cell = event.currentTarget;
+
+          if (pendingMttMinerReleaseCell !== cell) return;
+
+          cell.classList.remove('mtt-focused-miner');
+
+          if (focusedMttMinerCell === cell) {
+              focusedMttMinerCell = null;
+          }
+
+          pendingMttMinerReleaseCell = null;
       }
 
       function renderMttActiveMinersEmpty(tbody) {
@@ -6528,16 +6542,11 @@ body div.content-wrap div.content-area {
               stockPill.style.minWidth = '8%';
               stockPill.style.display = 'inline-block';
               stockPill.style.cursor = 'default';
-
-              const rawStock = Number(stock && stock[code]);
-              const stockValue = Number.isFinite(rawStock) && rawStock >= 0
-                  ? rawStock
-                  : 0;
-              const displayValue = TRADE_ORES.includes(code)
-                  ? Math.floor(stockValue / 3)
-                  : stockValue;
-
-              stockPill.textContent = fmtStock(displayValue);
+              const rawStock = Number(stock[code]) || 0;
+              const displayedStock = TRADE_ORES.includes(code)
+                  ? Math.floor(rawStock / 3)
+                  : rawStock;
+              stockPill.textContent = fmtStock(displayedStock);
               wrap.appendChild(stockPill);
 
               if (idx < STOCK_ORDER.length - 1) wrap.appendChild(textNode(' '));
@@ -9620,7 +9629,8 @@ body div.content-wrap div.content-area {
           /[?&]blast=(?:north|south|east|west)(?:[&#]|$)/i.test(location.href);
 
       const isBlastPage =
-          hasBlastParam && !!document.querySelector('canvas');
+          hasBlastParam &&
+          !!document.querySelector('.content-area canvas');
 
       const STORAGE = Object.freeze({
           log: 'hw_mining_log_test_v1',
