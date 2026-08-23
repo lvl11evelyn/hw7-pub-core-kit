@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.34
+// @version      2.35
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2660,10 +2660,46 @@ function hw7RunDocumentEndModules() {
                       }
                   }
 
+                  @keyframes PinnedMiner {
+                      0% {
+                          outline-color: #ff3030;
+                      }
+
+                      33.333% {
+                          outline-color: #35ff55;
+                      }
+
+                      66.666% {
+                          outline-color: #3978ff;
+                      }
+
+                      100% {
+                          outline-color: #ff3030;
+                      }
+                  }
+
+                  .mtt-active-miners-body tr {
+                      cursor: pointer;
+                  }
+
                   .mtt-focused-miner {
                       position: relative;
                       z-index: 2;
                       animation: FocusedMiner 1.2s alternate-reverse infinite;
+                  }
+
+                  .mtt-pinned-miner {
+                      position: relative;
+                      z-index: 2;
+                      outline: 2px solid #ff3030;
+                      outline-offset: -1px;
+                      animation: PinnedMiner 2.4s linear infinite;
+                  }
+
+                  .mtt-focused-miner.mtt-pinned-miner {
+                      animation:
+                          FocusedMiner 1.2s alternate-reverse infinite,
+                          PinnedMiner 2.4s linear infinite;
                   }
               `;
               document.head.appendChild(style);
@@ -2848,6 +2884,10 @@ function hw7RunDocumentEndModules() {
                   releaseMttMinerCellAtBoundary(sourceCell);
               });
 
+              row.addEventListener('click', () => {
+                  sourceCell.classList.toggle('mtt-pinned-miner');
+              });
+
               sourceCell.addEventListener(
                   'animationiteration',
                   handleMttMinerAnimationIteration
@@ -2876,6 +2916,8 @@ function hw7RunDocumentEndModules() {
       }
 
       function handleMttMinerAnimationIteration(event) {
+          if (event.animationName !== 'FocusedMiner') return;
+
           const cell = event.currentTarget;
 
           if (pendingMttMinerReleaseCell !== cell) return;
