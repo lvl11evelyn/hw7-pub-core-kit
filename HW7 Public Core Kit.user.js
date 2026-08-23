@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.36
+// @version      2.37
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -421,7 +421,7 @@ function hw7RunDocumentEndModules() {
     const K_PANEL_ANCHOR = 'jbgl_panel_anchor_v1';
 
     const MAX_ROWS = 5000;
-    const PANEL_WIDTH = 355;
+    const PANEL_WIDTH = 450;
     const JBET_ROW_GRID = '22% 13% 13% 13% 13% 10% 10% 6%';
 
     const JBET_PANEL_MODES = Object.freeze({
@@ -453,19 +453,19 @@ function hw7RunDocumentEndModules() {
     function bindJbetPlacementResize() {
         if (jbetPlacementResizeBound) return;
         jbetPlacementResizeBound = true;
-    
+
         const refreshPlacement = () => {
             const panel = document.getElementById('jbgl-inline-wrap');
             if (!panel) return;
-    
+
             applyJbetPanelPlacement(panel);
-    
+
             const dialog = document.getElementById('jbet-placement-dialog');
             if (dialog) updateJbetPlacementDialogPreview(dialog);
         };
-    
+
         window.addEventListener('resize', refreshPlacement, { passive: true });
-    
+
         const content = document.querySelector('.content-area');
         if (content && typeof ResizeObserver === 'function') {
             jbetContentResizeObserver = new ResizeObserver(refreshPlacement);
@@ -996,8 +996,9 @@ function hw7RunDocumentEndModules() {
       body.className = 'jbgl-scroll-body';
       body.style.boxSizing = 'border-box';
       body.style.maxHeight = '240px';
-      body.style.overflowY = 'auto';
+      body.style.overflowY = 'scroll';
       body.style.padding = '2px 3px 2px 5px';
+      body.style.scrollbarWidth = 'thin';
 
       const hours = orderedHourKeys(rows, state);
       const collapsedMap = loadCollapsedHours();
@@ -1044,9 +1045,9 @@ function hw7RunDocumentEndModules() {
       controls.id = 'jbgl-controls';
       controls.style.boxSizing = 'border-box';
       controls.style.display = 'flex';
-      controls.style.flexWrap = 'wrap';
-      controls.style.justifyContent = 'center';
-      controls.style.gap = '5px';
+      controls.style.flexWrap = 'nowrap';
+      controls.style.justifyContent = 'flex-start';
+      controls.style.gap = '12px';
       controls.style.width = '100%';
       controls.style.padding = '5px';
       controls.style.background = 'rgba(20,20,20,.75)';
@@ -1065,16 +1066,17 @@ function hw7RunDocumentEndModules() {
 
         const btn = document.createElement('a');
         btn.href = '#';
-        btn.className = 'btn light-blue hover-green';
+        btn.className = 'toggleAllBtn';
         btn.textContent = anyExpanded ? '[-] All' : '[+] All';
-        btn.style.display = 'inline-flex';
-        btn.style.alignItems = 'center';
-        btn.style.justifyContent = 'center';
-        btn.style.height = '22px';
+        btn.style.background = anyExpanded ? '#daa' : '#ada';
+        btn.style.height = 'auto';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '11px';
         btn.style.fontFamily = 'Consolas, monospace';
-        btn.style.padding = '4px 8px';
+        btn.style.padding = '4px';
+        btn.style.position = 'absolute';
+        btn.style.right = '18px';
+        btn.style.borderRadius = '4px';
 
         btn.addEventListener('click', event => {
           event.preventDefault();
@@ -1100,12 +1102,12 @@ function hw7RunDocumentEndModules() {
         btn.style.display = 'inline-flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
-        btn.style.minWidth = '92px';
-        btn.style.height = '22px';
+        btn.style.minWidth = '80px';
+        btn.style.height = '20px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '12px';
         btn.style.textTransform = 'uppercase';
-        btn.style.padding = '4px 8px';
+        btn.style.padding = '6px';
         return btn;
       }
 
@@ -1136,7 +1138,7 @@ function hw7RunDocumentEndModules() {
 
       const bulkToggleBtn = makeBulkToggleBtn();
 
-      controls.append(exportBtn, clearBtn, importToggle, bulkToggleBtn);
+      controls.append(exportBtn, importToggle, clearBtn, bulkToggleBtn);
       box.append(headerWrap, body);
       inlineWrap.append(box, footer, controls);
 
@@ -1665,8 +1667,6 @@ function hw7RunDocumentEndModules() {
       const lines = String(src || '').split(/\r?\n/);
 
       for (const line of lines) {
-        // Preserve the fixed-width blank first column after "<". Do NOT use "<\s*" here:
-        // that strips the STR blank cell and makes the first separator look like data.
         const m = line.match(/^(\d{2}\s+[A-Z]{3})-(\d{2}):(\d{2})\s*<([\s\S]*?)>\s*(?:#\d+)?\s*$/i);
         if (!m) continue;
 
@@ -1808,10 +1808,10 @@ function hw7RunDocumentEndModules() {
       const row = document.createElement('div');
       row.className = 'jbgl-hour-separator';
       row.style.whiteSpace = 'nowrap';
-      row.style.overflow = 'hidden';
-      row.style.color = '#a98';
-      row.style.textAlign = 'center';
-      row.style.lineHeight = '.6';
+      row.style.overflow = 'clip';
+      row.style.color = '#777';
+      row.style.textAlign = 'left';
+      row.style.lineHeight = '.5';
       row.style.textDecorationColor = '#d8c8b888';
       return row;
     }
@@ -1819,8 +1819,8 @@ function hw7RunDocumentEndModules() {
     function updateJbetSeparators(body) {
       if (!body) return;
 
-      const unit = '- - - - ';
-      const repeatCount = Math.max(1, Math.floor(body.clientWidth / 48.5));
+      const unit = '⩶ - ';
+      const repeatCount = Math.max(1, Math.floor(body.clientWidth / 34));
       const value = unit.repeat(repeatCount).trimEnd();
 
       for (const separator of body.querySelectorAll('.jbgl-hour-separator')) {
