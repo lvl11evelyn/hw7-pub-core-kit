@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.38
+// @version      2.39
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -6612,7 +6612,7 @@ body div.content-wrap div.content-area {
               const source = Number.isFinite(Number(a.sourceN)) ? ` from trade ${Math.round(Number(a.sourceN))}` : ' from run';
               const life = a.code === 'Bl' && Number.isFinite(Number(a.lifeManual)) ? ` | Life +${fmtInt(a.lifeManual, 0)} manual` : '';
               const note = a.code === 'Bl' ? `penalty cloned /3${source}` : `values cloned${source}`;
-              lineWrap.textContent = `RECON < ${a.time || '--:--:--'} | day trade ${n} | ${a.code} manually resolved | ${note}${life} >`;
+              lineWrap.textContent = `< ${a.time || '--:--:--'} trade ${n} Resolved ${a.code} | ${note}${life} >`;
               wrap.appendChild(lineWrap);
           }
 
