@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.39
+// @version      2.40
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -5618,7 +5618,7 @@ body div.content-wrap div.content-area {
           div.appendChild(textNode(' | '));
           appendBalancePart(div, balance.net.str, 'STR', COLORS.str, 2);
           div.appendChild(textNode(' | '));
-          appendBalancePart(div, balance.net.tbs, 'NET', COLORS.tbs, 2);
+          appendBalancePart(div, balance.net.tbs, '', COLORS.tbs, 2);
           div.appendChild(textNode(' > Life Δ <'));
           appendBalancePart(div, balance.net.life, '', COLORS.text, 0);
           div.appendChild(textNode('>'));
