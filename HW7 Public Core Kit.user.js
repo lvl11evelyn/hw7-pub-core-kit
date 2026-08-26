@@ -5613,13 +5613,13 @@ body div.content-wrap div.content-area {
           div.style.lineHeight = '1.25';
           div.appendChild(textNode('TBS Δ < '));
           appendBalancePart(div, balance.net.spd, 'SPD', COLORS.spd, 2);
-          div.appendChild(textNode(' | '));
+          div.appendChild(textNode(' ⁞ '));
           appendBalancePart(div, balance.net.pow, 'POW', COLORS.pow, 2);
-          div.appendChild(textNode(' | '));
+          div.appendChild(textNode(' ⁞ '));
           appendBalancePart(div, balance.net.str, 'STR', COLORS.str, 2);
-          div.appendChild(textNode(' | '));
+          div.appendChild(textNode(' ⁞ '));
           appendBalancePart(div, balance.net.tbs, '', COLORS.tbs, 2);
-          div.appendChild(textNode(' > Life Δ <'));
+          div.appendChild(textNode(' > Life <'));
           appendBalancePart(div, balance.net.life, '', COLORS.text, 0);
           div.appendChild(textNode('>'));
           return div;
