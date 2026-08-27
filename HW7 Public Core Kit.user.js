@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.40
+// @version      2.41
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -887,8 +887,6 @@ function hw7RunDocumentEndModules() {
           style.textContent = `
               .content-wrap > div.content-area {
                   margin: 0 auto 0 15px;
-                  min-width: 700px !important;
-                  max-width: 700px !important;
                   }`;
           document.head.appendChild(style);
       }
@@ -5499,8 +5497,6 @@ function hw7RunDocumentEndModules() {
           style.textContent = `
 body div.content-wrap div.content-area {
   margin: 0 auto 0 15px;
-  min-width: 745px !important;
-  max-width: 745px !important;
 }
 
 /*
@@ -5609,19 +5605,18 @@ body div.content-wrap div.content-area {
 
       function renderBalancePrimaryLine(balance) {
           const div = document.createElement('div');
-          div.style.fontSize = '16px';
+          div.style.fontSize = '15px';
           div.style.lineHeight = '1.25';
-          div.appendChild(textNode('TBS Δ < '));
+          div.appendChild(textNode('< '));
           appendBalancePart(div, balance.net.spd, 'SPD', COLORS.spd, 2);
-          div.appendChild(textNode(' ⁞ '));
+          div.appendChild(textNode(' ⁝ '));
           appendBalancePart(div, balance.net.pow, 'POW', COLORS.pow, 2);
-          div.appendChild(textNode(' ⁞ '));
+          div.appendChild(textNode(' ⁝ '));
           appendBalancePart(div, balance.net.str, 'STR', COLORS.str, 2);
-          div.appendChild(textNode(' ⁞ '));
+          div.appendChild(textNode(' ⁝ '));
           appendBalancePart(div, balance.net.tbs, '', COLORS.tbs, 2);
-          div.appendChild(textNode(' > Life <'));
+          div.appendChild(textNode(' > Life '));
           appendBalancePart(div, balance.net.life, '', COLORS.text, 0);
-          div.appendChild(textNode('>'));
           return div;
       }
 
@@ -5631,7 +5626,7 @@ body div.content-wrap div.content-area {
           div.style.alignItems = 'center';
           div.style.justifyContent = 'space-between';
           div.style.gap = '12px';
-          div.style.fontSize = '12px';
+          div.style.fontSize = '11px';
           div.style.lineHeight = '1.25';
           div.style.margin = '3px auto 0';
           div.style.maxWidth = 'calc(100% - 12px)';
@@ -5647,11 +5642,11 @@ body div.content-wrap div.content-area {
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
           if (swimParts.length > 0) {
-              swim.appendChild(textNode('Swim < '));
+              swim.appendChild(textNode('Swim:  '));
 
               swimParts.forEach(([label, value, color, decimals], index) => {
                   if (index > 0) {
-                      swim.appendChild(textNode(' | '));
+                      swim.appendChild(textNode(' ⁝ '));
                   }
 
                   appendBalancePart(
@@ -5663,20 +5658,18 @@ body div.content-wrap div.content-area {
                   );
               });
 
-              swim.appendChild(textNode(' >'));
           }
 
-          trade.appendChild(textNode('Trade < '));
+          trade.appendChild(textNode('Trade:  '));
           appendBalancePart(trade, balance.trade.spd, 'SPD', SOURCE_COLORS.spd, 2);
-          trade.appendChild(textNode(' | '));
+          trade.appendChild(textNode(' ⁝ '));
           appendBalancePart(trade, balance.trade.pow, 'POW', SOURCE_COLORS.pow, 2);
-          trade.appendChild(textNode(' | '));
+          trade.appendChild(textNode(' ⁝ '));
           appendBalancePart(trade, balance.trade.str, 'STR', SOURCE_COLORS.str, 2);
           if (Math.abs(Number(balance.trade.life) || 0) > 0.000001) {
-              trade.appendChild(textNode(' | '));
+              trade.appendChild(textNode(' ⁝ '));
               appendBalancePart(trade, balance.trade.life, 'Life', SOURCE_COLORS.life, 0);
           }
-          trade.appendChild(textNode(' >'));
 
           if (swimParts.length > 0) {
               div.appendChild(swim);
