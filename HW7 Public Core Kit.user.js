@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.41
+// @version      2.42
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -5607,15 +5607,14 @@ body div.content-wrap div.content-area {
           const div = document.createElement('div');
           div.style.fontSize = '15px';
           div.style.lineHeight = '1.25';
-          div.appendChild(textNode('< '));
           appendBalancePart(div, balance.net.spd, 'SPD', COLORS.spd, 2);
           div.appendChild(textNode(' ⁝ '));
           appendBalancePart(div, balance.net.pow, 'POW', COLORS.pow, 2);
           div.appendChild(textNode(' ⁝ '));
           appendBalancePart(div, balance.net.str, 'STR', COLORS.str, 2);
           div.appendChild(textNode(' ⁝ '));
-          appendBalancePart(div, balance.net.tbs, '', COLORS.tbs, 2);
-          div.appendChild(textNode(' > Life '));
+          appendBalancePart(div, balance.net.tbs, 'TBS', COLORS.tbs, 2);
+          div.appendChild(textNode(' ⁝ HP '));
           appendBalancePart(div, balance.net.life, '', COLORS.text, 0);
           return div;
       }
@@ -5638,7 +5637,7 @@ body div.content-wrap div.content-area {
               ['SPD', balance.swim.spd, SOURCE_COLORS.spd, 2],
               ['POW', balance.swim.pow, SOURCE_COLORS.pow, 2],
               ['STR', balance.swim.str, SOURCE_COLORS.str, 2],
-              ['Life', balance.swim.life, SOURCE_COLORS.life, 0]
+              ['HP', balance.swim.life, SOURCE_COLORS.life, 0]
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
           if (swimParts.length > 0) {
@@ -5668,7 +5667,7 @@ body div.content-wrap div.content-area {
           appendBalancePart(trade, balance.trade.str, 'STR', SOURCE_COLORS.str, 2);
           if (Math.abs(Number(balance.trade.life) || 0) > 0.000001) {
               trade.appendChild(textNode(' ⁝ '));
-              appendBalancePart(trade, balance.trade.life, 'Life', SOURCE_COLORS.life, 0);
+              appendBalancePart(trade, balance.trade.life, 'HP', SOURCE_COLORS.life, 0);
           }
 
           if (swimParts.length > 0) {
