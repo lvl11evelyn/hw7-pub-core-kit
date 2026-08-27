@@ -2520,7 +2520,7 @@ function hw7RunDocumentEndModules() {
               'min-width:0',
               'display:flex',
               'flex-direction:column',
-              'align-items:center',
+              'align-items:flex-end',
               'align-self:stretch',
               'margin-top:12px'
           ].join(';');
@@ -6805,7 +6805,7 @@ body div.content-wrap div.content-area {
               ['', balance.swim.spd, SOURCE_COLORS.spd, 3],
               ['', balance.swim.pow, SOURCE_COLORS.pow, 3],
               ['', balance.swim.str, SOURCE_COLORS.str, 3],
-              ['Life', balance.swim.life, SOURCE_COLORS.life, 0]
+              ['HP', balance.swim.life, SOURCE_COLORS.life, 0]
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
           if (swimParts.length > 0) {
