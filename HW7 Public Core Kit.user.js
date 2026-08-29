@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.42
+// @version      2.43
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -2520,7 +2520,7 @@ function hw7RunDocumentEndModules() {
               'min-width:0',
               'display:flex',
               'flex-direction:column',
-              'align-items:flex-end',
+              'align-items:center',
               'align-self:stretch',
               'margin-top:12px'
           ].join(';');
@@ -6802,9 +6802,9 @@ body div.content-wrap div.content-area {
           wrap.style.color = COLORS.dim;
 
           const swimParts = [
-              ['', balance.swim.spd, SOURCE_COLORS.spd, 3],
-              ['', balance.swim.pow, SOURCE_COLORS.pow, 3],
-              ['', balance.swim.str, SOURCE_COLORS.str, 3],
+              ['Spd', balance.swim.spd, SOURCE_COLORS.spd, 2],
+              ['Pow', balance.swim.pow, SOURCE_COLORS.pow, 2],
+              ['Str', balance.swim.str, SOURCE_COLORS.str, 2],
               ['HP', balance.swim.life, SOURCE_COLORS.life, 0]
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
@@ -6812,8 +6812,8 @@ body div.content-wrap div.content-area {
               const swimLine = document.createElement('div');
               swimLine.className = 'mtt-trade-source-line';
               swimLine.style.fontSize = '11px';
-              //swimLine.style.fontStyle = 'italic';
-              swimLine.appendChild(textNode('Jungle Δ '));
+              swimLine.style.opacity = '.8';
+              swimLine.appendChild(textNode('Jungle: '));
 
               swimParts.forEach(([label, value, color, decimals], index) => {
                   if (index > 0) {
@@ -6836,19 +6836,19 @@ body div.content-wrap div.content-area {
           const tradeLine = document.createElement('div');
           tradeLine.className = 'mtt-trade-source-line';
           tradeLine.style.fontSize = '11px';
-          //tradeLine.style.fontStyle = 'italic';
-          tradeLine.appendChild(textNode('Trades Δ '));
-          appendStatSpan(tradeLine, balance.trade.spd, '', SOURCE_COLORS.spd, 8, 2);
+          tradeLine.style.opacity = '.8';
+          tradeLine.appendChild(textNode('Trades: '));
+          appendStatSpan(tradeLine, balance.trade.spd, 'Spd', SOURCE_COLORS.spd, 8, 2);
           tradeLine.appendChild(textNode(' '));
-          appendStatSpan(tradeLine, balance.trade.pow, '', SOURCE_COLORS.pow, 8, 2);
+          appendStatSpan(tradeLine, balance.trade.pow, 'Pow', SOURCE_COLORS.pow, 8, 2);
           tradeLine.appendChild(textNode(' '));
-          appendStatSpan(tradeLine, balance.trade.str, '', SOURCE_COLORS.str, 8, 2);
+          appendStatSpan(tradeLine, balance.trade.str, 'Str', SOURCE_COLORS.str, 8, 2);
           if (Math.abs(Number(balance.trade.life) || 0) > 0.000001) {
               tradeLine.appendChild(textNode(' '));
-              appendStatSpan(tradeLine, balance.trade.life, 'Life', SOURCE_COLORS.life, 6, 0);
+              appendStatSpan(tradeLine, balance.trade.life, 'HP', SOURCE_COLORS.life, 6, 0);
           }
           tradeLine.appendChild(textNode(' '));
-          appendStatSpan(tradeLine, balance.trade.tbs, 'TBS', SOURCE_COLORS.tbs, 6, 2);
+          appendStatSpan(tradeLine, balance.trade.tbs, 'TBS', SOURCE_COLORS.tbs, 6, 0);
           wrap.appendChild(tradeLine);
 
           return wrap;
