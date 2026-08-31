@@ -2483,7 +2483,7 @@ function hw7RunDocumentEndModules() {
           grid.className = 'mtt-mine-interior-grid';
           grid.style.cssText = [
               'display:grid',
-              'grid-template-columns:164px 250px minmax(0,1fr)',
+              'grid-template-columns:minmax(0,1fr) 250px 164px',
               'align-items:stretch',
               'column-gap:6px',
               'width:100%',
