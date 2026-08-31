@@ -2546,7 +2546,7 @@ function hw7RunDocumentEndModules() {
           statsBlock.style.padding = '18px 0 22px';
           infoColumn.appendChild(statsBlock);
 
-          grid.append(mapColumn, traversalColumn, infoColumn);
+          grid.append(infoColumn, traversalColumn, mapColumn);
           outerTable.insertAdjacentElement('beforebegin', grid);
           outerTable.remove();
 
