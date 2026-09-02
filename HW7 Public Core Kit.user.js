@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.44
+// @version      2.45
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -80,6 +80,7 @@ function HW_registerSharedSettingsProvider(panel, provider) {
                 margin: 0 !important;
                 box-sizing: border-box !important;
                 border-radius: 5px 0 5px 5px !important;
+                min-height: 450px;
             }
             .hw-settings-shared-body > [data-hw-settings-provider][hidden] {
                 display: none !important;
