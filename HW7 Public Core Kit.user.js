@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.43
+// @version      2.37
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -14,6 +14,264 @@
 // @updateURL    https://raw.githubusercontent.com/lvl11evelyn/hw7-pub-core-kit/main/HW7%20Public%20Core%20Kit.user.js
 // @downloadURL  https://raw.githubusercontent.com/lvl11evelyn/hw7-pub-core-kit/main/HW7%20Public%20Core%20Kit.user.js
 // ==/UserScript==
+
+/*
+ * Shared HoboWars settings-provider coordinator.
+ *
+ * Every participating userscript carries this small coordinator. Providers
+ * communicate only through same-origin DOM markers/events and localStorage;
+ * no userscript sandbox needs a reference to another script's functions.
+ */
+function HW_registerSharedSettingsProvider(panel, provider) {
+    'use strict';
+
+    if (!(panel instanceof HTMLElement) || !provider) return;
+
+    const ACTIVE_KEY = 'hw.sharedSettings.activeProvider.v1';
+    const REGISTER_EVENT = 'hw:settings-provider-registered';
+    const COORDINATOR_ATTR = 'data-hw-settings-coordinator';
+    const PROVIDER_SELECTOR = '[data-hw-settings-provider]';
+    const TAB_WIDTH = 25;
+
+    panel.dataset.hwSettingsProvider = String(provider.id || '');
+    panel.dataset.hwSettingsLabel = String(provider.label || provider.id || '');
+    panel.dataset.hwSettingsOrder = String(Number(provider.order) || 999);
+    panel.hidden = false;
+
+    if (!document.getElementById('hw-shared-settings-styles')) {
+        const style = document.createElement('style');
+        style.id = 'hw-shared-settings-styles';
+        style.textContent = `
+            .hw-settings-shared-shell {
+                --hw-settings-tab-width: ${TAB_WIDTH}px;
+                position: relative;
+                float: right;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) var(--hw-settings-tab-width);
+                align-items: start;
+                width: 472px;
+                max-width: calc(100% - 307px);
+                margin: 0 0 18px 5px;
+                box-sizing: border-box;
+                color: #111;
+                font-family: Arial, sans-serif;
+                font-size: 13px;
+            }
+            .hw-settings-shared-shell::after {
+                content: '';
+                position: absolute;
+                z-index: 2;
+                top: 0;
+                right: calc(var(--hw-settings-tab-width) - 1px);
+                bottom: 0;
+                width: 1px;
+                background: #c9c9c9;
+                pointer-events: none;
+            }
+            .hw-settings-shared-body {
+                position: relative;
+                z-index: 1;
+                min-width: 0;
+            }
+            .hw-settings-shared-body > [data-hw-settings-provider] {
+                float: none !important;
+                width: 100% !important;
+                max-width: none !important;
+                margin: 0 !important;
+                box-sizing: border-box !important;
+                border-radius: 5px 0 5px 5px !important;
+            }
+            .hw-settings-shared-body > [data-hw-settings-provider][hidden] {
+                display: none !important;
+            }
+            .hw-settings-shared-tabs {
+                position: relative;
+                z-index: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                min-width: 0;
+                gap: 5px;
+                padding-top: 16px;
+            }
+            .hw-settings-tab {
+                position: relative;
+                z-index: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                height: 100px;
+                min-height: 100px;
+                margin: 0;
+                padding: 7px 5px;
+                box-sizing: border-box;
+                border: 1px solid #7f7f7f;
+                border-radius: 0 10px 10px 0;
+                background: #c3c3c3;
+                color: #111;
+                font: inherit;
+                text-align: center;
+                text-decoration: underline;
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
+                cursor: pointer;
+            }
+            .hw-settings-tab:not(.hw-settings-tab-active):hover {
+                border-color: #007a2d;
+                background: #f4fff8;
+            }
+            .hw-settings-tab.hw-settings-tab-active {
+                z-index: 3;
+                border: 1px solid #c9c9c9;
+                border-left-color: #f3f3f3;
+                background: #f3f3f3;
+                font-weight: bold;
+                text-decoration: none;
+                cursor: default;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const readProviders = () => {
+        const seen = new Set();
+        return [...document.querySelectorAll(PROVIDER_SELECTOR)]
+            .filter(node => {
+                const id = node.dataset.hwSettingsProvider || '';
+                if (!id || seen.has(id)) return false;
+                seen.add(id);
+                return true;
+            })
+            .sort((a, b) => {
+                const orderDelta =
+                    (Number(a.dataset.hwSettingsOrder) || 999) -
+                    (Number(b.dataset.hwSettingsOrder) || 999);
+                return orderDelta ||
+                    (a.dataset.hwSettingsProvider || '').localeCompare(
+                        b.dataset.hwSettingsProvider || ''
+                    );
+            });
+    };
+
+    const syncShellGeometry = shell => {
+        if (!shell) return;
+        shell.classList.remove('hw-settings-shared-stacked');
+    };
+
+    const coordinate = () => {
+        const providers = readProviders();
+        let shell = document.querySelector('.hw-settings-shared-shell');
+
+        if (providers.length < 2) {
+            if (shell) {
+                const parent = shell.parentNode;
+                const reference = shell;
+                for (const providerPanel of providers) {
+                    parent?.insertBefore(providerPanel, reference);
+                    providerPanel.hidden = false;
+                    providerPanel.style.removeProperty('display');
+                }
+                shell.remove();
+            } else if (providers[0]) {
+                providers[0].hidden = false;
+                providers[0].style.removeProperty('display');
+            }
+            return;
+        }
+
+        if (!shell) {
+            const anchor = providers[0];
+            shell = document.createElement('section');
+            shell.className = 'hw-settings-shared-shell';
+            shell.setAttribute('aria-label', 'HoboWars settings');
+
+            const body = document.createElement('div');
+            body.className = 'hw-settings-shared-body';
+
+            const tabs = document.createElement('div');
+            tabs.className = 'hw-settings-shared-tabs';
+            tabs.setAttribute('role', 'tablist');
+            tabs.setAttribute('aria-label', 'Settings providers');
+            tabs.setAttribute('aria-orientation', 'vertical');
+
+            shell.append(body, tabs);
+            anchor.parentNode?.insertBefore(shell, anchor);
+        }
+
+        const body = shell.querySelector('.hw-settings-shared-body');
+        const tabs = shell.querySelector('.hw-settings-shared-tabs');
+        if (!body || !tabs) return;
+
+        for (const providerPanel of providers) body.appendChild(providerPanel);
+
+        let activeId = '';
+        try {
+            activeId = localStorage.getItem(ACTIVE_KEY) || '';
+        } catch {
+            activeId = '';
+        }
+
+        if (!providers.some(item => item.dataset.hwSettingsProvider === activeId)) {
+            activeId = providers[0].dataset.hwSettingsProvider;
+            try {
+                localStorage.setItem(ACTIVE_KEY, activeId);
+            } catch {
+                // Deterministic in-memory fallback still applies.
+            }
+        }
+
+        tabs.replaceChildren();
+
+        for (const providerPanel of providers) {
+            const id = providerPanel.dataset.hwSettingsProvider;
+            const label = providerPanel.dataset.hwSettingsLabel || id;
+            const active = id === activeId;
+
+            providerPanel.hidden = !active;
+            providerPanel.style.setProperty(
+                'display',
+                active ? 'block' : 'none',
+                'important'
+            );
+            providerPanel.setAttribute('role', 'tabpanel');
+            providerPanel.setAttribute('aria-hidden', String(!active));
+
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'hw-settings-tab';
+            tab.classList.toggle('hw-settings-tab-active', active);
+            tab.textContent = label;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', String(active));
+
+            tab.addEventListener('click', () => {
+                try {
+                    localStorage.setItem(ACTIVE_KEY, id);
+                } catch {
+                    // The current click can still be reflected in this page.
+                }
+                coordinate();
+            });
+
+            tabs.appendChild(tab);
+        }
+
+        syncShellGeometry(shell);
+    };
+
+    const root = document.documentElement;
+    if (!root.hasAttribute(COORDINATOR_ATTR)) {
+        root.setAttribute(COORDINATOR_ATTR, `${provider.id}:${Date.now()}`);
+        document.addEventListener(REGISTER_EVENT, coordinate);
+        window.addEventListener('resize', () => {
+            syncShellGeometry(document.querySelector('.hw-settings-shared-shell'));
+        }, { passive: true });
+    }
+
+    coordinate();
+    document.dispatchEvent(new Event(REGISTER_EVENT));
+}
 
 /* ===== HW Combat Roll Ranges 0.0.1 ===== */
 (function () {
@@ -405,6 +663,431 @@
   }
 })();
 
+const HW7_CORE_SETTINGS_CONTEXT_KEY = 'hw.sharedSettings.coreKitContext.v1';
+
+function HW7_openCoreKitSettings(context) {
+  const nextContext = context === 'mines' ? 'mines' : 'jungle';
+
+  try {
+    localStorage.setItem('hw.sharedSettings.activeProvider.v1', 'core-kit');
+    localStorage.setItem(HW7_CORE_SETTINGS_CONTEXT_KEY, nextContext);
+  } catch {
+    // The destination still opens with its deterministic default context.
+  }
+
+  const destination = new URL('/game/game.php', location.origin);
+  const sr = new URL(location.href).searchParams.get('sr');
+  if (sr) destination.searchParams.set('sr', sr);
+  destination.searchParams.set('cmd', 'preferences');
+  destination.hash = `core-kit-${nextContext}`;
+  location.assign(destination.href);
+}
+
+function HW7_installCorePreferencesProvider() {
+  'use strict';
+
+  const url = new URL(location.href);
+  if (!url.pathname.endsWith('/game/game.php')) return;
+  if (url.searchParams.get('cmd') !== 'preferences') return;
+
+  const allowedKeys = new Set(['sr', 'cmd']);
+  if ([...url.searchParams.keys()].some(key => !allowedKeys.has(key))) return;
+
+  const content = document.querySelector('.content-area');
+  if (!content || document.getElementById('hw7-core-preferences-panel')) return;
+
+  const JUNGLE = Object.freeze({
+    id: 'jungle',
+    title: 'Jungle Placement',
+    modeKey: 'jbgl_panel_mode_v1',
+    anchorKey: 'jbgl_panel_anchor_v1',
+    defaultMode: 'content-end'
+  });
+
+  const MINES = Object.freeze({
+    id: 'mines',
+    title: 'Mines Settings',
+    modeKey: 'mtt_panel_mode_v1',
+    anchorKey: 'mtt_panel_anchor_v1',
+    layoutKey: 'mtt_mine_interior_layout_v1',
+    defaultMode: 'fixed'
+  });
+
+  const ANCHORS = Object.freeze([
+    'top-left',
+    'top-right',
+    'middle-left',
+    'middle-right',
+    'bottom-left',
+    'bottom-right',
+    'open-area'
+  ]);
+
+  const style = document.createElement('style');
+  style.id = 'hw7-core-preferences-styles';
+  style.textContent = `
+    #hw7-core-preferences-panel {
+      float: right;
+      width: min(440px, 48%);
+      margin: 0 0 18px 12px;
+      padding: 10px 12px 12px;
+      box-sizing: border-box;
+      border: 1px solid #c7c7c7;
+      border-radius: 5px;
+      background: #f3f3f3;
+      color: #111;
+      font: 13px Arial, sans-serif;
+    }
+    #hw7-core-preferences-panel .hw7-core-title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 3px;
+    }
+    #hw7-core-preferences-panel .hw7-core-title {
+      font-size: 20px;
+      font-weight: bold;
+      letter-spacing: .5px;
+    }
+    #hw7-core-preferences-panel .hw7-core-version {
+      color: #888;
+      font-size: 10px;
+    }
+    #hw7-core-preferences-panel .hw7-core-subtitle {
+      margin-bottom: 9px;
+      text-align: center;
+      color: #666;
+      font-size: 11px;
+    }
+    #hw7-core-preferences-panel .hw7-core-contexts {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 9px;
+    }
+    #hw7-core-preferences-panel .hw7-core-context-button {
+      min-width: 90px;
+      padding: 4px 9px;
+      border: 1px solid #888;
+      border-radius: 3px;
+      background: #ddd;
+      cursor: pointer;
+    }
+    #hw7-core-preferences-panel .hw7-core-context-button[aria-pressed="true"] {
+      border-color: #555;
+      background: #fff;
+      font-weight: bold;
+      cursor: default;
+    }
+    #hw7-core-preferences-panel .hw7-core-setting-heading {
+      margin: 0 0 6px;
+      text-align: center;
+      font-size: 13px;
+    }
+    #hw7-core-preferences-panel .hw7-core-option-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px 16px;
+      margin: 4px 0 9px;
+      font-size: 11px;
+    }
+    #hw7-core-preferences-panel .hw7-core-placement-preview {
+      position: relative;
+      height: 245px;
+      overflow: hidden;
+      border: 2px solid #222;
+      border-radius: 3px;
+      background: #cfcfcf;
+    }
+    #hw7-core-preferences-panel .hw7-core-placement-detail {
+      margin-top: 7px;
+      padding: 6px 7px;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      background: #fff;
+      font: 10px/1.35 Consolas, monospace;
+    }
+    #hw7-core-preferences-panel .hw7-core-note {
+      margin-top: 7px;
+      text-align: center;
+      color: #777;
+      font-size: 10px;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const panel = document.createElement('section');
+  panel.id = 'hw7-core-preferences-panel';
+
+  const titleRow = document.createElement('div');
+  titleRow.className = 'hw7-core-title-row';
+
+  const title = document.createElement('div');
+  title.className = 'hw7-core-title';
+  title.textContent = 'HW7 Core Kit';
+
+  const version = document.createElement('span');
+  version.className = 'hw7-core-version';
+  version.textContent = `v${(typeof GM_info === 'object' && GM_info?.script?.version) || '?'}`;
+
+  titleRow.append(title, version);
+
+  const subtitle = document.createElement('div');
+  subtitle.className = 'hw7-core-subtitle';
+  subtitle.textContent = 'Tracker Placement & Layout';
+
+  const contexts = document.createElement('div');
+  contexts.className = 'hw7-core-contexts';
+
+  const settingsBody = document.createElement('div');
+  const contextButtons = new Map();
+
+  let activeContext = 'jungle';
+  try {
+    const stored = localStorage.getItem(HW7_CORE_SETTINGS_CONTEXT_KEY);
+    if (stored === 'mines') activeContext = 'mines';
+  } catch {
+    // Jungle is the deterministic default.
+  }
+
+  if (location.hash === '#core-kit-mines') activeContext = 'mines';
+  if (location.hash === '#core-kit-jungle') activeContext = 'jungle';
+
+  const readPlacement = config => {
+    const rawMode = String(GM_getValue(config.modeKey, config.defaultMode) || '');
+    const rawAnchor = String(GM_getValue(config.anchorKey, 'top-left') || '');
+    return {
+      mode: config.defaultMode === 'fixed'
+        ? (rawMode === 'content-end' ? 'content-end' : 'fixed')
+        : (rawMode === 'fixed' ? 'fixed' : 'content-end'),
+      anchor: ANCHORS.includes(rawAnchor) ? rawAnchor : 'top-left'
+    };
+  };
+
+  const writePlacement = (config, next) => {
+    const current = readPlacement(config);
+    const mode = next.mode === 'fixed' || next.mode === 'content-end'
+      ? next.mode
+      : current.mode;
+    const anchor = ANCHORS.includes(next.anchor) ? next.anchor : current.anchor;
+    GM_setValue(config.modeKey, mode);
+    GM_setValue(config.anchorKey, anchor);
+    return { mode, anchor };
+  };
+
+  const descriptions = Object.freeze({
+    'top-left': 'Top-Left: Close to the Content Area, fills 60% of the available height.',
+    'top-right': 'Top-Right: Close to the right viewport edge, fills 60% of the available height.',
+    'middle-left': 'Middle-Left: Close to the Content Area, fills the available height.',
+    'middle-right': 'Middle-Right: Close to the right viewport edge, fills the available height.',
+    'bottom-left': 'Bottom-Left: Close to the Content Area, fills 60% of the available height upward.',
+    'bottom-right': 'Bottom-Right: Close to the right viewport edge, fills 60% of the available height upward.',
+    'open-area': 'Open Area: Fills the available space between the Content Area and viewport bounds.'
+  });
+
+  const renderContext = () => {
+    const config = activeContext === 'mines' ? MINES : JUNGLE;
+    const settings = readPlacement(config);
+    settingsBody.replaceChildren();
+
+    for (const [id, button] of contextButtons) {
+      const active = id === activeContext;
+      button.setAttribute('aria-pressed', String(active));
+      button.disabled = active;
+    }
+
+    const heading = document.createElement('h3');
+    heading.className = 'hw7-core-setting-heading';
+    heading.textContent = config.title;
+
+    const modeRow = document.createElement('div');
+    modeRow.className = 'hw7-core-option-row';
+
+    const contentLabel = document.createElement('label');
+    const contentRadio = document.createElement('input');
+    contentRadio.type = 'radio';
+    contentRadio.name = `hw7-${config.id}-panel-mode`;
+    contentRadio.value = 'content-end';
+    contentRadio.checked = settings.mode === 'content-end';
+    contentLabel.append(contentRadio, document.createTextNode(' Content End'));
+
+    const fixedLabel = document.createElement('label');
+    const fixedRadio = document.createElement('input');
+    fixedRadio.type = 'radio';
+    fixedRadio.name = `hw7-${config.id}-panel-mode`;
+    fixedRadio.value = 'fixed';
+    fixedRadio.checked = settings.mode === 'fixed';
+    fixedLabel.append(fixedRadio, document.createTextNode(' Fixed Place'));
+
+    modeRow.append(contentLabel, fixedLabel);
+    settingsBody.append(heading, modeRow);
+
+    if (config.id === 'mines') {
+      const layoutRow = document.createElement('div');
+      layoutRow.className = 'hw7-core-option-row';
+      layoutRow.title = 'Applies on the next Mines page load.';
+
+      const layoutHeading = document.createElement('strong');
+      layoutHeading.textContent = 'Mines Interior Layout:';
+
+      const layout = String(GM_getValue(config.layoutKey, 'three-column') || '');
+
+      for (const [value, labelText] of [
+        ['native', 'Native 2-column'],
+        ['three-column', '3-column']
+      ]) {
+        const label = document.createElement('label');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'hw7-mine-interior-layout';
+        radio.value = value;
+        radio.checked = value === (layout === 'native' ? 'native' : 'three-column');
+        radio.addEventListener('change', () => {
+          if (radio.checked) GM_setValue(config.layoutKey, value);
+        });
+        label.append(radio, document.createTextNode(` ${labelText}`));
+        layoutRow.append(label);
+      }
+
+      layoutRow.insertBefore(layoutHeading, layoutRow.firstChild);
+      settingsBody.appendChild(layoutRow);
+    }
+
+    const preview = document.createElement('div');
+    preview.className = 'hw7-core-placement-preview';
+
+    const topbar = document.createElement('div');
+    topbar.style.cssText = 'position:absolute;left:0;right:0;top:0;height:36px;background:#777;border-bottom:2px solid #333;text-align:center;font-size:10px;font-weight:bold;line-height:36px;';
+    topbar.textContent = 'TOPBAR / TOPBAR MENU';
+
+    const leftPanel = document.createElement('div');
+    leftPanel.style.cssText = 'position:absolute;left:0;top:38px;bottom:0;width:18%;background:#e3e3e3;border-right:1px solid #888;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;writing-mode:vertical-rl;transform:rotate(180deg);';
+    leftPanel.textContent = 'LEFT PANEL';
+
+    const contentArea = document.createElement('div');
+    contentArea.style.cssText = 'position:absolute;left:18%;top:38px;bottom:0;width:40%;background:#f7f7f7;border-right:2px solid #444;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;';
+    contentArea.textContent = 'CONTENT AREA';
+
+    const safeArea = document.createElement('div');
+    safeArea.style.cssText = 'position:absolute;left:58%;right:0;top:38px;bottom:0;background:#ddd;';
+
+    const shade = document.createElement('div');
+    shade.style.cssText = 'position:absolute;border:1px dashed #2f8fbc;background:rgba(47,143,188,.18);pointer-events:none;';
+
+    const points = Object.freeze({
+      'top-left': [8, 13],
+      'top-right': [92, 13],
+      'middle-left': [8, 50],
+      'middle-right': [92, 50],
+      'bottom-left': [8, 87],
+      'bottom-right': [92, 87],
+      'open-area': [50, 50]
+    });
+
+    const anchorInputs = [];
+    for (const [anchor, [x, y]] of Object.entries(points)) {
+      const label = document.createElement('label');
+      label.style.cssText = `position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;`;
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = `hw7-${config.id}-panel-anchor`;
+      radio.value = anchor;
+      radio.checked = settings.anchor === anchor;
+      radio.style.cursor = 'pointer';
+      anchorInputs.push(radio);
+
+      radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        writePlacement(config, { mode: 'fixed', anchor });
+        renderContext();
+      });
+
+      label.appendChild(radio);
+      safeArea.appendChild(label);
+    }
+
+    safeArea.appendChild(shade);
+    preview.append(topbar, leftPanel, contentArea, safeArea);
+
+    const detail = document.createElement('div');
+    detail.className = 'hw7-core-placement-detail';
+
+    const updatePreview = () => {
+      const current = readPlacement(config);
+      const enabled = current.mode === 'fixed';
+      safeArea.style.opacity = enabled ? '1' : '.45';
+      shade.style.display = enabled ? 'block' : 'none';
+      for (const input of anchorInputs) input.disabled = !enabled;
+
+      if (enabled) {
+        const shadeStyles = {
+          'top-left': ['6%', '8%', '42%', '52%'],
+          'top-right': ['52%', '8%', '42%', '52%'],
+          'middle-left': ['6%', '5%', '42%', '90%'],
+          'middle-right': ['52%', '5%', '42%', '90%'],
+          'bottom-left': ['6%', '40%', '42%', '52%'],
+          'bottom-right': ['52%', '40%', '42%', '52%'],
+          'open-area': ['5%', '5%', '90%', '90%']
+        };
+        const [left, top, width, height] = shadeStyles[current.anchor] || shadeStyles['top-left'];
+        Object.assign(shade.style, { left, top, width, height });
+        detail.textContent = descriptions[current.anchor] || '';
+      } else {
+        detail.textContent = 'Content End: Panel is placed after the last UI item in the Content Area.';
+      }
+    };
+
+    const onModeChange = event => {
+      if (!event.target.checked) return;
+      writePlacement(config, { mode: event.target.value });
+      renderContext();
+    };
+
+    contentRadio.addEventListener('change', onModeChange);
+    fixedRadio.addEventListener('change', onModeChange);
+
+    settingsBody.append(preview, detail);
+    updatePreview();
+  };
+
+  for (const [id, label] of [['jungle', 'Jungle'], ['mines', 'Mines']]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'hw7-core-context-button';
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      activeContext = id;
+      try {
+        localStorage.setItem(HW7_CORE_SETTINGS_CONTEXT_KEY, id);
+      } catch {
+        // The current page still reflects the selection.
+      }
+      renderContext();
+    });
+    contextButtons.set(id, button);
+    contexts.appendChild(button);
+  }
+
+  const note = document.createElement('div');
+  note.className = 'hw7-core-note';
+  note.textContent = 'Placement changes are retained under the existing Jungle and Mines storage keys.';
+
+  panel.append(titleRow, subtitle, contexts, settingsBody, note);
+  content.insertBefore(panel, content.firstChild);
+
+  HW_registerSharedSettingsProvider(panel, {
+    id: 'core-kit',
+    label: 'Core Kit',
+    order: 20
+  });
+
+  renderContext();
+}
+
 /* Execute the modules that were originally configured for document-end
    after the document has been parsed. */
 function hw7RunDocumentEndModules() {
@@ -421,7 +1104,7 @@ function hw7RunDocumentEndModules() {
     const K_PANEL_ANCHOR = 'jbgl_panel_anchor_v1';
 
     const MAX_ROWS = 5000;
-    const PANEL_WIDTH = 450;
+    const PANEL_WIDTH = 355;
     const JBET_ROW_GRID = '22% 13% 13% 13% 13% 10% 10% 6%';
 
     const JBET_PANEL_MODES = Object.freeze({
@@ -453,19 +1136,19 @@ function hw7RunDocumentEndModules() {
     function bindJbetPlacementResize() {
         if (jbetPlacementResizeBound) return;
         jbetPlacementResizeBound = true;
-
+    
         const refreshPlacement = () => {
             const panel = document.getElementById('jbgl-inline-wrap');
             if (!panel) return;
-
+    
             applyJbetPanelPlacement(panel);
-
+    
             const dialog = document.getElementById('jbet-placement-dialog');
             if (dialog) updateJbetPlacementDialogPreview(dialog);
         };
-
+    
         window.addEventListener('resize', refreshPlacement, { passive: true });
-
+    
         const content = document.querySelector('.content-area');
         if (content && typeof ResizeObserver === 'function') {
             jbetContentResizeObserver = new ResizeObserver(refreshPlacement);
@@ -887,6 +1570,8 @@ function hw7RunDocumentEndModules() {
           style.textContent = `
               .content-wrap > div.content-area {
                   margin: 0 auto 0 15px;
+                  min-width: 700px !important;
+                  max-width: 700px !important;
                   }`;
           document.head.appendChild(style);
       }
@@ -960,8 +1645,8 @@ function hw7RunDocumentEndModules() {
         const settingsBtn = document.createElement('button');
         settingsBtn.type = 'button';
         settingsBtn.textContent = '⚙';
-        settingsBtn.title = 'Jungle panel placement';
-        settingsBtn.setAttribute('aria-label', 'Jungle panel placement');
+        settingsBtn.title = 'Open Jungle settings in Core Kit Preferences';
+        settingsBtn.setAttribute('aria-label', 'Open Jungle settings in Core Kit Preferences');
         settingsBtn.style.cssText = [
           'display:inline-flex',
           'align-items:center',
@@ -982,7 +1667,7 @@ function hw7RunDocumentEndModules() {
         settingsBtn.addEventListener('click', event => {
           event.preventDefault();
           event.stopPropagation();
-          openJbetPlacementDialog(inlineWrap);
+          HW7_openCoreKitSettings('jungle');
         });
 
         settingsCell.appendChild(settingsBtn);
@@ -994,9 +1679,8 @@ function hw7RunDocumentEndModules() {
       body.className = 'jbgl-scroll-body';
       body.style.boxSizing = 'border-box';
       body.style.maxHeight = '240px';
-      body.style.overflowY = 'scroll';
+      body.style.overflowY = 'auto';
       body.style.padding = '2px 3px 2px 5px';
-      body.style.scrollbarWidth = 'thin';
 
       const hours = orderedHourKeys(rows, state);
       const collapsedMap = loadCollapsedHours();
@@ -1043,9 +1727,9 @@ function hw7RunDocumentEndModules() {
       controls.id = 'jbgl-controls';
       controls.style.boxSizing = 'border-box';
       controls.style.display = 'flex';
-      controls.style.flexWrap = 'nowrap';
-      controls.style.justifyContent = 'flex-start';
-      controls.style.gap = '12px';
+      controls.style.flexWrap = 'wrap';
+      controls.style.justifyContent = 'center';
+      controls.style.gap = '5px';
       controls.style.width = '100%';
       controls.style.padding = '5px';
       controls.style.background = 'rgba(20,20,20,.75)';
@@ -1064,17 +1748,16 @@ function hw7RunDocumentEndModules() {
 
         const btn = document.createElement('a');
         btn.href = '#';
-        btn.className = 'toggleAllBtn';
+        btn.className = 'btn light-blue hover-green';
         btn.textContent = anyExpanded ? '[-] All' : '[+] All';
-        btn.style.background = anyExpanded ? '#daa' : '#ada';
-        btn.style.height = 'auto';
+        btn.style.display = 'inline-flex';
+        btn.style.alignItems = 'center';
+        btn.style.justifyContent = 'center';
+        btn.style.height = '22px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '11px';
         btn.style.fontFamily = 'Consolas, monospace';
-        btn.style.padding = '4px';
-        btn.style.position = 'absolute';
-        btn.style.right = '18px';
-        btn.style.borderRadius = '4px';
+        btn.style.padding = '4px 8px';
 
         btn.addEventListener('click', event => {
           event.preventDefault();
@@ -1100,12 +1783,12 @@ function hw7RunDocumentEndModules() {
         btn.style.display = 'inline-flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
-        btn.style.minWidth = '80px';
-        btn.style.height = '20px';
+        btn.style.minWidth = '92px';
+        btn.style.height = '22px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '12px';
         btn.style.textTransform = 'uppercase';
-        btn.style.padding = '6px';
+        btn.style.padding = '4px 8px';
         return btn;
       }
 
@@ -1136,7 +1819,7 @@ function hw7RunDocumentEndModules() {
 
       const bulkToggleBtn = makeBulkToggleBtn();
 
-      controls.append(exportBtn, importToggle, clearBtn, bulkToggleBtn);
+      controls.append(exportBtn, clearBtn, importToggle, bulkToggleBtn);
       box.append(headerWrap, body);
       inlineWrap.append(box, footer, controls);
 
@@ -1665,6 +2348,8 @@ function hw7RunDocumentEndModules() {
       const lines = String(src || '').split(/\r?\n/);
 
       for (const line of lines) {
+        // Preserve the fixed-width blank first column after "<". Do NOT use "<\s*" here:
+        // that strips the STR blank cell and makes the first separator look like data.
         const m = line.match(/^(\d{2}\s+[A-Z]{3})-(\d{2}):(\d{2})\s*<([\s\S]*?)>\s*(?:#\d+)?\s*$/i);
         if (!m) continue;
 
@@ -1806,10 +2491,10 @@ function hw7RunDocumentEndModules() {
       const row = document.createElement('div');
       row.className = 'jbgl-hour-separator';
       row.style.whiteSpace = 'nowrap';
-      row.style.overflow = 'clip';
-      row.style.color = '#777';
-      row.style.textAlign = 'left';
-      row.style.lineHeight = '.5';
+      row.style.overflow = 'hidden';
+      row.style.color = '#a98';
+      row.style.textAlign = 'center';
+      row.style.lineHeight = '.6';
       row.style.textDecorationColor = '#d8c8b888';
       return row;
     }
@@ -1817,8 +2502,8 @@ function hw7RunDocumentEndModules() {
     function updateJbetSeparators(body) {
       if (!body) return;
 
-      const unit = '⩶ - ';
-      const repeatCount = Math.max(1, Math.floor(body.clientWidth / 34));
+      const unit = '- - - - ';
+      const repeatCount = Math.max(1, Math.floor(body.clientWidth / 48.5));
       const value = unit.repeat(repeatCount).trimEnd();
 
       for (const separator of body.querySelectorAll('.jbgl-hour-separator')) {
@@ -2483,7 +3168,7 @@ function hw7RunDocumentEndModules() {
           grid.className = 'mtt-mine-interior-grid';
           grid.style.cssText = [
               'display:grid',
-              'grid-template-columns:minmax(0,1fr) 250px 164px',
+              'grid-template-columns:164px 250px minmax(0,1fr)',
               'align-items:stretch',
               'column-gap:6px',
               'width:100%',
@@ -2546,7 +3231,7 @@ function hw7RunDocumentEndModules() {
           statsBlock.style.padding = '18px 0 22px';
           infoColumn.appendChild(statsBlock);
 
-          grid.append(infoColumn, traversalColumn, mapColumn);
+          grid.append(mapColumn, traversalColumn, infoColumn);
           outerTable.insertAdjacentElement('beforebegin', grid);
           outerTable.remove();
 
@@ -5497,6 +6182,8 @@ function hw7RunDocumentEndModules() {
           style.textContent = `
 body div.content-wrap div.content-area {
   margin: 0 auto 0 15px;
+  min-width: 745px !important;
+  max-width: 745px !important;
 }
 
 /*
@@ -5605,17 +6292,19 @@ body div.content-wrap div.content-area {
 
       function renderBalancePrimaryLine(balance) {
           const div = document.createElement('div');
-          div.style.fontSize = '15px';
+          div.style.fontSize = '16px';
           div.style.lineHeight = '1.25';
+          div.appendChild(textNode('TBS Δ < '));
           appendBalancePart(div, balance.net.spd, 'SPD', COLORS.spd, 2);
-          div.appendChild(textNode(' ⁝ '));
+          div.appendChild(textNode(' | '));
           appendBalancePart(div, balance.net.pow, 'POW', COLORS.pow, 2);
-          div.appendChild(textNode(' ⁝ '));
+          div.appendChild(textNode(' | '));
           appendBalancePart(div, balance.net.str, 'STR', COLORS.str, 2);
-          div.appendChild(textNode(' ⁝ '));
-          appendBalancePart(div, balance.net.tbs, 'TBS', COLORS.tbs, 2);
-          div.appendChild(textNode(' ⁝ HP '));
+          div.appendChild(textNode(' | '));
+          appendBalancePart(div, balance.net.tbs, 'NET', COLORS.tbs, 2);
+          div.appendChild(textNode(' > Life Δ <'));
           appendBalancePart(div, balance.net.life, '', COLORS.text, 0);
+          div.appendChild(textNode('>'));
           return div;
       }
 
@@ -5625,7 +6314,7 @@ body div.content-wrap div.content-area {
           div.style.alignItems = 'center';
           div.style.justifyContent = 'space-between';
           div.style.gap = '12px';
-          div.style.fontSize = '11px';
+          div.style.fontSize = '12px';
           div.style.lineHeight = '1.25';
           div.style.margin = '3px auto 0';
           div.style.maxWidth = 'calc(100% - 12px)';
@@ -5637,15 +6326,15 @@ body div.content-wrap div.content-area {
               ['SPD', balance.swim.spd, SOURCE_COLORS.spd, 2],
               ['POW', balance.swim.pow, SOURCE_COLORS.pow, 2],
               ['STR', balance.swim.str, SOURCE_COLORS.str, 2],
-              ['HP', balance.swim.life, SOURCE_COLORS.life, 0]
+              ['Life', balance.swim.life, SOURCE_COLORS.life, 0]
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
           if (swimParts.length > 0) {
-              swim.appendChild(textNode('Swim:  '));
+              swim.appendChild(textNode('Swim < '));
 
               swimParts.forEach(([label, value, color, decimals], index) => {
                   if (index > 0) {
-                      swim.appendChild(textNode(' ⁝ '));
+                      swim.appendChild(textNode(' | '));
                   }
 
                   appendBalancePart(
@@ -5657,18 +6346,20 @@ body div.content-wrap div.content-area {
                   );
               });
 
+              swim.appendChild(textNode(' >'));
           }
 
-          trade.appendChild(textNode('Trade:  '));
+          trade.appendChild(textNode('Trade < '));
           appendBalancePart(trade, balance.trade.spd, 'SPD', SOURCE_COLORS.spd, 2);
-          trade.appendChild(textNode(' ⁝ '));
+          trade.appendChild(textNode(' | '));
           appendBalancePart(trade, balance.trade.pow, 'POW', SOURCE_COLORS.pow, 2);
-          trade.appendChild(textNode(' ⁝ '));
+          trade.appendChild(textNode(' | '));
           appendBalancePart(trade, balance.trade.str, 'STR', SOURCE_COLORS.str, 2);
           if (Math.abs(Number(balance.trade.life) || 0) > 0.000001) {
-              trade.appendChild(textNode(' ⁝ '));
-              appendBalancePart(trade, balance.trade.life, 'HP', SOURCE_COLORS.life, 0);
+              trade.appendChild(textNode(' | '));
+              appendBalancePart(trade, balance.trade.life, 'Life', SOURCE_COLORS.life, 0);
           }
+          trade.appendChild(textNode(' >'));
 
           if (swimParts.length > 0) {
               div.appendChild(swim);
@@ -5735,8 +6426,8 @@ body div.content-wrap div.content-area {
               const settingsBtn = document.createElement('button');
               settingsBtn.type = 'button';
               settingsBtn.textContent = '⚙';
-              settingsBtn.title = 'Mines settings';
-              settingsBtn.setAttribute('aria-label', 'Mines settings');
+              settingsBtn.title = 'Open Mines settings in Core Kit Preferences';
+              settingsBtn.setAttribute('aria-label', 'Open Mines settings in Core Kit Preferences');
               settingsBtn.style.cssText = [
                   'display:inline-flex',
                   'align-items:center',
@@ -5756,7 +6447,7 @@ body div.content-wrap div.content-area {
               settingsBtn.addEventListener('click', event => {
                   event.preventDefault();
                   event.stopPropagation();
-                  openMttPlacementDialog(panel);
+                  HW7_openCoreKitSettings('mines');
               });
 
               legend.append(title, settingsBtn);
@@ -6604,7 +7295,7 @@ body div.content-wrap div.content-area {
               const source = Number.isFinite(Number(a.sourceN)) ? ` from trade ${Math.round(Number(a.sourceN))}` : ' from run';
               const life = a.code === 'Bl' && Number.isFinite(Number(a.lifeManual)) ? ` | Life +${fmtInt(a.lifeManual, 0)} manual` : '';
               const note = a.code === 'Bl' ? `penalty cloned /3${source}` : `values cloned${source}`;
-              lineWrap.textContent = `< ${a.time || '--:--:--'} trade ${n} Resolved ${a.code} | ${note}${life} >`;
+              lineWrap.textContent = `RECON < ${a.time || '--:--:--'} | day trade ${n} | ${a.code} manually resolved | ${note}${life} >`;
               wrap.appendChild(lineWrap);
           }
 
@@ -6802,18 +7493,18 @@ body div.content-wrap div.content-area {
           wrap.style.color = COLORS.dim;
 
           const swimParts = [
-              ['Spd', balance.swim.spd, SOURCE_COLORS.spd, 2],
-              ['Pow', balance.swim.pow, SOURCE_COLORS.pow, 2],
-              ['Str', balance.swim.str, SOURCE_COLORS.str, 2],
-              ['HP', balance.swim.life, SOURCE_COLORS.life, 0]
+              ['', balance.swim.spd, SOURCE_COLORS.spd, 3],
+              ['', balance.swim.pow, SOURCE_COLORS.pow, 3],
+              ['', balance.swim.str, SOURCE_COLORS.str, 3],
+              ['Life', balance.swim.life, SOURCE_COLORS.life, 0]
           ].filter(([, value]) => (Number(value) || 0) > 0.000001);
 
           if (swimParts.length > 0) {
               const swimLine = document.createElement('div');
               swimLine.className = 'mtt-trade-source-line';
               swimLine.style.fontSize = '11px';
-              swimLine.style.opacity = '.8';
-              swimLine.appendChild(textNode('Jungle: '));
+              //swimLine.style.fontStyle = 'italic';
+              swimLine.appendChild(textNode('Jungle Δ '));
 
               swimParts.forEach(([label, value, color, decimals], index) => {
                   if (index > 0) {
@@ -6836,19 +7527,19 @@ body div.content-wrap div.content-area {
           const tradeLine = document.createElement('div');
           tradeLine.className = 'mtt-trade-source-line';
           tradeLine.style.fontSize = '11px';
-          tradeLine.style.opacity = '.8';
-          tradeLine.appendChild(textNode('Trades: '));
-          appendStatSpan(tradeLine, balance.trade.spd, 'Spd', SOURCE_COLORS.spd, 8, 2);
+          //tradeLine.style.fontStyle = 'italic';
+          tradeLine.appendChild(textNode('Trades Δ '));
+          appendStatSpan(tradeLine, balance.trade.spd, '', SOURCE_COLORS.spd, 8, 2);
           tradeLine.appendChild(textNode(' '));
-          appendStatSpan(tradeLine, balance.trade.pow, 'Pow', SOURCE_COLORS.pow, 8, 2);
+          appendStatSpan(tradeLine, balance.trade.pow, '', SOURCE_COLORS.pow, 8, 2);
           tradeLine.appendChild(textNode(' '));
-          appendStatSpan(tradeLine, balance.trade.str, 'Str', SOURCE_COLORS.str, 8, 2);
+          appendStatSpan(tradeLine, balance.trade.str, '', SOURCE_COLORS.str, 8, 2);
           if (Math.abs(Number(balance.trade.life) || 0) > 0.000001) {
               tradeLine.appendChild(textNode(' '));
-              appendStatSpan(tradeLine, balance.trade.life, 'HP', SOURCE_COLORS.life, 6, 0);
+              appendStatSpan(tradeLine, balance.trade.life, 'Life', SOURCE_COLORS.life, 6, 0);
           }
           tradeLine.appendChild(textNode(' '));
-          appendStatSpan(tradeLine, balance.trade.tbs, 'TBS', SOURCE_COLORS.tbs, 6, 0);
+          appendStatSpan(tradeLine, balance.trade.tbs, 'TBS', SOURCE_COLORS.tbs, 6, 2);
           wrap.appendChild(tradeLine);
 
           return wrap;
@@ -7057,7 +7748,7 @@ body div.content-wrap div.content-area {
               'top:calc(100% - 59px)',
               'box-sizing:border-box',
               'z-index:2',
-              'background-color:#444444',
+              'background-color:#111111',
               'border-top:2px solid #111111',
               'display:flex',
               'justify-content:space-between',
@@ -7084,7 +7775,7 @@ body div.content-wrap div.content-area {
           const exportBtn = document.createElement('button');
           exportBtn.textContent = 'EXPORT';
           exportBtn.style.margin = '3px 2% 0';
-          exportBtn.style.padding = '3px 12px';
+          exportBtn.style.padding = '1px 2px';
           exportBtn.addEventListener('click', () => {
               exportMines(s, rows);
           });
@@ -7092,7 +7783,7 @@ body div.content-wrap div.content-area {
           const importBtn = document.createElement('button');
           importBtn.textContent = 'IMPORT';
           importBtn.style.margin = '3px 2% 0 0';
-          importBtn.style.padding = '3px 12px';
+          importBtn.style.padding = '1px 2px';
           importBtn.addEventListener('click', () => {
               openImportBox(s, rows);
           });
@@ -7101,7 +7792,7 @@ body div.content-wrap div.content-area {
           swimBtn.textContent = 'SWIM⇢▤';
           swimBtn.title = 'Import a Jungle export for the Trading Post.';
           swimBtn.style.margin = '3px 2% 0 0';
-          swimBtn.style.padding = '3px 12px';
+          swimBtn.style.padding = '0 2px';
           swimBtn.addEventListener('click', () => {
               openSwimImportBox(s, rows);
           });
@@ -7111,7 +7802,7 @@ body div.content-wrap div.content-area {
           clearBtn.style.color = '#e80000';
           clearBtn.style.fontWeight = 'bold';
           clearBtn.style.margin = '3px 2% 0 6%';
-          clearBtn.style.padding = '3px 6px';
+          clearBtn.style.padding = '1px 2px';
           clearBtn.style.cursor = 'not-allowed';
           clearBtn.addEventListener('click', () => {
               if (!confirm('Clear the trade ledger?')) return;
@@ -11142,7 +11833,11 @@ body div.content-wrap div.content-area {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', hw7RunDocumentEndModules, { once: true });
+  document.addEventListener('DOMContentLoaded', () => {
+    HW7_installCorePreferencesProvider();
+    hw7RunDocumentEndModules();
+  }, { once: true });
 } else {
+  HW7_installCorePreferencesProvider();
   hw7RunDocumentEndModules();
 }
