@@ -1749,12 +1749,12 @@ function hw7RunDocumentEndModules() {
 
         const btn = document.createElement('a');
         btn.href = '#';
-        btn.className = 'btn light-blue hover-green';
+        btn.className = 'btn';
         btn.textContent = anyExpanded ? '[-] All' : '[+] All';
         btn.style.display = 'inline-flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
-        btn.style.height = '22px';
+        btn.style.height = '16px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '11px';
         btn.style.fontFamily = 'Consolas, monospace';
@@ -1779,13 +1779,13 @@ function hw7RunDocumentEndModules() {
       function makeBtn(label) {
         const btn = document.createElement('a');
         btn.href = '#';
-        btn.className = 'btn light-blue hover-green';
+        btn.className = 'btn';
         btn.textContent = label;
         btn.style.display = 'inline-flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
-        btn.style.minWidth = '92px';
-        btn.style.height = '22px';
+        btn.style.minWidth = '70px';
+        btn.style.height = '16px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '12px';
         btn.style.textTransform = 'uppercase';
