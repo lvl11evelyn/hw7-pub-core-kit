@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.45
+// @version      2.46
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -1730,9 +1730,9 @@ function hw7RunDocumentEndModules() {
       controls.style.display = 'flex';
       controls.style.flexWrap = 'wrap';
       controls.style.justifyContent = 'center';
-      controls.style.gap = '5px';
+      controls.style.gap = '6px';
       controls.style.width = '100%';
-      controls.style.padding = '5px';
+      controls.style.padding = '2px 6px';
       controls.style.background = 'rgba(20,20,20,.75)';
       controls.style.border = '1px solid #2f2f2f';
       controls.style.borderTop = '0';
@@ -1751,14 +1751,15 @@ function hw7RunDocumentEndModules() {
         btn.href = '#';
         btn.className = 'btn';
         btn.textContent = anyExpanded ? '[-] All' : '[+] All';
-        btn.style.display = 'inline-flex';
+        btn.style.display = 'flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
         btn.style.height = '16px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '11px';
         btn.style.fontFamily = 'Consolas, monospace';
-        btn.style.padding = '4px 8px';
+        btn.style.padding = '4px';
+        btn.style.margin = '0 5px 0 auto';
 
         btn.addEventListener('click', event => {
           event.preventDefault();
@@ -1781,7 +1782,7 @@ function hw7RunDocumentEndModules() {
         btn.href = '#';
         btn.className = 'btn';
         btn.textContent = label;
-        btn.style.display = 'inline-flex';
+        btn.style.display = 'flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
         btn.style.minWidth = '70px';
