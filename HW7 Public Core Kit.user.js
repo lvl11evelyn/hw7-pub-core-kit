@@ -1754,12 +1754,12 @@ function hw7RunDocumentEndModules() {
         btn.style.display = 'flex';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
-        btn.style.height = '16px';
+        btn.style.height = '22px';
         btn.style.whiteSpace = 'nowrap';
         btn.style.fontSize = '11px';
         btn.style.fontFamily = 'Consolas, monospace';
-        btn.style.padding = '4px';
-        btn.style.margin = '0 5px 0 auto';
+        btn.style.padding = '0 4px';
+        btn.style.margin = '3px 5px 0 auto';
 
         btn.addEventListener('click', event => {
           event.preventDefault();
