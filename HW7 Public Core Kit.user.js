@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HW7 Core Kit
 // @namespace    hw-7-tracking-panel-kit
-// @version      2.46
+// @version      2.47
 // @description  Unified public access build for HoboWars
 // @author       lvl11evelyn / sɛvɜn (2924238)
 // @license      All Rights Reserved
@@ -666,6 +666,67 @@ function HW_registerSharedSettingsProvider(panel, provider) {
 
 const HW7_CORE_SETTINGS_CONTEXT_KEY = 'hw.sharedSettings.coreKitContext.v1';
 
+const HW7_CORE_UI_FEATURES = Object.freeze([
+  {
+    id: 'junglePanel',
+    label: 'Jungle Event Tracker',
+    key: 'hw7_core_ui_jungle_panel_enabled_v1'
+  },
+  {
+    id: 'minesPanel',
+    label: 'Mines Telemetry Panel',
+    key: 'hw7_core_ui_mines_panel_enabled_v1'
+  },
+  {
+    id: 'mineInteriorLayout',
+    label: 'Mines Interior Layout',
+    key: 'hw7_core_ui_mines_layout_enabled_v1'
+  },
+  {
+    id: 'tradingPostBalance',
+    label: 'Trading Post Balance',
+    key: 'hw7_core_ui_trade_balance_enabled_v1'
+  },
+  {
+    id: 'depotTradeCards',
+    label: 'Depot Trade Cards',
+    key: 'hw7_core_ui_depot_cards_enabled_v1'
+  },
+  {
+    id: 'topbarStats',
+    label: 'Topbar Stat Totals',
+    key: 'hw7_core_ui_topbar_stats_enabled_v1'
+  },
+  {
+    id: 'combatRollRanges',
+    label: 'Combat Roll Ranges',
+    key: 'hw7_core_ui_combat_rolls_enabled_v1'
+  },
+  {
+    id: 'miningLog',
+    label: 'Mining Log',
+    key: 'hw7_core_ui_mining_log_enabled_v1'
+  }
+]);
+
+function HW7_getCoreUiFeature(id) {
+  return HW7_CORE_UI_FEATURES.find(feature => feature.id === id) || null;
+}
+
+function HW7_isCoreUiEnabled(id) {
+  const feature = HW7_getCoreUiFeature(id);
+  if (!feature) return true;
+
+  const stored = GM_getValue(feature.key, true);
+  return stored !== false && stored !== 0 && stored !== '0' && stored !== 'false';
+}
+
+function HW7_setCoreUiEnabled(id, enabled) {
+  const feature = HW7_getCoreUiFeature(id);
+  if (!feature) return;
+  GM_setValue(feature.key, !!enabled);
+}
+
 function HW7_openCoreKitSettings(context) {
   const nextContext = context === 'mines' ? 'mines' : 'jungle';
 
@@ -739,6 +800,9 @@ function HW7_installCorePreferencesProvider() {
       color: #111;
       font: 13px Arial, sans-serif;
     }
+    #hw7-core-preferences-panel [hidden] {
+      display: none !important;
+    }
     #hw7-core-preferences-panel .hw7-core-title-row {
       display: flex;
       align-items: baseline;
@@ -760,6 +824,36 @@ function HW7_installCorePreferencesProvider() {
       text-align: center;
       color: #666;
       font-size: 11px;
+    }
+    #hw7-core-preferences-panel .hw7-core-visibility {
+      margin: 0 0 10px;
+      padding: 7px 8px 8px;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      background: #fff;
+    }
+    #hw7-core-preferences-panel .hw7-core-visibility-title {
+      margin: 0 0 5px;
+      text-align: center;
+      font-size: 12px;
+    }
+    #hw7-core-preferences-panel .hw7-core-visibility-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 12px;
+      font-size: 11px;
+    }
+    #hw7-core-preferences-panel .hw7-core-visibility-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      min-width: 0;
+      line-height: 1.25;
+      cursor: pointer;
+    }
+    #hw7-core-preferences-panel .hw7-core-visibility-option input {
+      flex: 0 0 auto;
+      margin: 1px 0 0;
     }
     #hw7-core-preferences-panel .hw7-core-contexts {
       display: flex;
@@ -811,12 +905,6 @@ function HW7_installCorePreferencesProvider() {
       background: #fff;
       font: 10px/1.35 Consolas, monospace;
     }
-    #hw7-core-preferences-panel .hw7-core-note {
-      margin-top: 7px;
-      text-align: center;
-      color: #777;
-      font-size: 10px;
-    }
   `;
   document.head.appendChild(style);
 
@@ -838,7 +926,35 @@ function HW7_installCorePreferencesProvider() {
 
   const subtitle = document.createElement('div');
   subtitle.className = 'hw7-core-subtitle';
-  subtitle.textContent = 'Tracker Placement & Layout';
+  subtitle.textContent = 'Visibility, Placement & Layout';
+
+  const visibility = document.createElement('section');
+  visibility.className = 'hw7-core-visibility';
+
+  const visibilityTitle = document.createElement('h3');
+  visibilityTitle.className = 'hw7-core-visibility-title';
+  visibilityTitle.textContent = 'Visible Features';
+
+  const visibilityGrid = document.createElement('div');
+  visibilityGrid.className = 'hw7-core-visibility-grid';
+
+  for (const feature of HW7_CORE_UI_FEATURES) {
+    const label = document.createElement('label');
+    label.className = 'hw7-core-visibility-option';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = HW7_isCoreUiEnabled(feature.id);
+    checkbox.addEventListener('change', () => {
+      HW7_setCoreUiEnabled(feature.id, checkbox.checked);
+      renderContext();
+    });
+
+    label.append(checkbox, document.createTextNode(feature.label));
+    visibilityGrid.appendChild(label);
+  }
+
+  visibility.append(visibilityTitle, visibilityGrid);
 
   const contexts = document.createElement('div');
   contexts.className = 'hw7-core-contexts';
@@ -892,6 +1008,9 @@ function HW7_installCorePreferencesProvider() {
   const renderContext = () => {
     const config = activeContext === 'mines' ? MINES : JUNGLE;
     const settings = readPlacement(config);
+    const panelFeature = config.id === 'mines' ? 'minesPanel' : 'junglePanel';
+    const placementEnabled = HW7_isCoreUiEnabled(panelFeature);
+    const mineLayoutEnabled = HW7_isCoreUiEnabled('mineInteriorLayout');
     settingsBody.replaceChildren();
 
     for (const [id, button] of contextButtons) {
@@ -903,9 +1022,11 @@ function HW7_installCorePreferencesProvider() {
     const heading = document.createElement('h3');
     heading.className = 'hw7-core-setting-heading';
     heading.textContent = config.title;
+    heading.hidden = !placementEnabled && (config.id !== 'mines' || !mineLayoutEnabled);
 
     const modeRow = document.createElement('div');
     modeRow.className = 'hw7-core-option-row';
+    modeRow.hidden = !placementEnabled;
 
     const contentLabel = document.createElement('label');
     const contentRadio = document.createElement('input');
@@ -929,6 +1050,7 @@ function HW7_installCorePreferencesProvider() {
     if (config.id === 'mines') {
       const layoutRow = document.createElement('div');
       layoutRow.className = 'hw7-core-option-row';
+      layoutRow.hidden = !mineLayoutEnabled;
       layoutRow.title = 'Applies on the next Mines page load.';
 
       const layoutHeading = document.createElement('strong');
@@ -959,6 +1081,7 @@ function HW7_installCorePreferencesProvider() {
 
     const preview = document.createElement('div');
     preview.className = 'hw7-core-placement-preview';
+    preview.hidden = !placementEnabled;
 
     const topbar = document.createElement('div');
     topbar.style.cssText = 'position:absolute;left:0;right:0;top:0;height:36px;background:#777;border-bottom:2px solid #333;text-align:center;font-size:10px;font-weight:bold;line-height:36px;';
@@ -1016,6 +1139,7 @@ function HW7_installCorePreferencesProvider() {
 
     const detail = document.createElement('div');
     detail.className = 'hw7-core-placement-detail';
+    detail.hidden = !placementEnabled;
 
     const updatePreview = () => {
       const current = readPlacement(config);
@@ -1073,11 +1197,7 @@ function HW7_installCorePreferencesProvider() {
     contexts.appendChild(button);
   }
 
-  const note = document.createElement('div');
-  note.className = 'hw7-core-note';
-  note.textContent = 'Placement changes are retained under the existing Jungle and Mines storage keys.';
-
-  panel.append(titleRow, subtitle, contexts, settingsBody, note);
+  panel.append(titleRow, subtitle, visibility, contexts, settingsBody);
   content.insertBefore(panel, content.firstChild);
 
   HW_registerSharedSettingsProvider(panel, {
@@ -1599,6 +1719,8 @@ function hw7RunDocumentEndModules() {
     function render(rows, state) {
       const oldWrap = document.getElementById('jbgl-inline-wrap');
       if (oldWrap) oldWrap.remove();
+
+      if (!HW7_isCoreUiEnabled('junglePanel')) return;
 
       const legacyIds = ['jbgl-box', 'jbgl-controls', 'jbgl-footer', 'jbgl-import-toggle'];
       for (const id of legacyIds) document.getElementById(id)?.remove();
@@ -3067,7 +3189,9 @@ function hw7RunDocumentEndModules() {
       };
 
       maybeRecordSnapshot(snapshot);
-      applyMttMineInteriorLayout();
+      if (HW7_isCoreUiEnabled('mineInteriorLayout')) {
+          applyMttMineInteriorLayout();
+      }
       render(snapshot, rows, state);
       renderTradingPostBalance(snapshot);
       renderDepotTradeCards(snapshot);
@@ -3685,6 +3809,7 @@ function hw7RunDocumentEndModules() {
       }
 
       function renderDepotTradeCards(s) {
+          if (!HW7_isCoreUiEnabled('depotTradeCards')) return;
           if (!isTradePage) return;
 
           const content = document.querySelector('.content-area');
@@ -6236,6 +6361,12 @@ body div.content-wrap div.content-area {
 
       function renderTradingPostBalance(s) {
           const existing = document.getElementById('mtt-trading-post-balance');
+
+          if (!HW7_isCoreUiEnabled('tradingPostBalance')) {
+              if (existing) existing.remove();
+              return;
+          }
+
           const anchor = findTradingPostBannerAnchor();
 
           if (!anchor) {
@@ -6382,6 +6513,12 @@ body div.content-wrap div.content-area {
       }
 
       function render(s, rows, state) {
+          if (!HW7_isCoreUiEnabled('minesPanel')) {
+              document.getElementById('mtt-panel')?.remove();
+              document.getElementById('mtt-placement-overlay')?.remove();
+              return;
+          }
+
           injectMttLayoutStyle();
 
           let panel = document.getElementById('mtt-panel');
@@ -9845,6 +9982,14 @@ body div.content-wrap div.content-area {
     }
 
     function renderTopbar(stats) {
+      const showStats = HW7_isCoreUiEnabled('topbarStats');
+      const showRolls = HW7_isCoreUiEnabled('combatRollRanges');
+
+      if (!showStats && !showRolls) {
+        document.querySelector('#hwtbs-suite-panel')?.remove();
+        return;
+      }
+
       // Match CSMP's layout-aware placement:
       // The Future: insert as another topbar section after native stats.
       // Legacy/standard layouts: insert after #playerStats and stack internally.
@@ -9893,6 +10038,11 @@ body div.content-wrap div.content-area {
       const panel = suite.querySelector('#hwtbs-topbar-panel');
       const rollPanel = suite.querySelector('#hwtbs-roll-panel');
       if (!panel || !rollPanel) return;
+
+      panel.hidden = !showStats;
+      rollPanel.hidden = !showRolls;
+      suite.classList.toggle('hwtbs-stats-hidden', !showStats);
+      suite.classList.toggle('hwtbs-rolls-hidden', !showRolls);
 
       const spd = finiteOrNull(stats.spd);
       const pow = finiteOrNull(stats.pow);
@@ -10141,6 +10291,10 @@ body div.content-wrap div.content-area {
   box-sizing: border-box;
 }
 
+#hwtbs-suite-panel [hidden] {
+  display: none !important;
+}
+
 #hwtbs-suite-panel {
   min-width: 0;
   color: #111;
@@ -10200,8 +10354,16 @@ body div.content-wrap div.content-area {
   border-right: 1px solid #181818;
 }
 
+#hwtbs-suite-panel.hwtbs-layout-future.hwtbs-rolls-hidden #hwtbs-topbar-panel {
+  border-right: 0;
+}
+
 #hwtbs-suite-panel.hwtbs-layout-standard #hwtbs-topbar-panel {
   border-bottom: 1px solid #181818;
+}
+
+#hwtbs-suite-panel.hwtbs-layout-standard.hwtbs-rolls-hidden #hwtbs-topbar-panel {
+  border-bottom: 0;
 }
 
 .hwtbs-line,
@@ -10468,15 +10630,21 @@ body div.content-wrap div.content-area {
       const contentArea = document.querySelector('.content-area');
       if (!contentArea) return;
 
+      const showMiningLog = HW7_isCoreUiEnabled('miningLog');
+
       // The redesigned panel owns this reserved lower region.
-      contentArea.style.setProperty('padding-bottom', '370px', 'important');
+      if (showMiningLog) {
+          contentArea.style.setProperty('padding-bottom', '370px', 'important');
+      }
 
       const importedHelperData = importHelperHistoryOnce();
 
       // Helper may already have rendered its entire historical Mining Log into
       // .content-area by the time this test module runs. Remove that donor UI
       // before serializing or scanning the native Mines page.
-      removeHelperMiningLog();
+      if (showMiningLog) {
+          removeHelperMiningLog();
+      }
 
       const nativeYieldImageCache = buildNativeYieldImageCache();
 
@@ -10942,6 +11110,8 @@ body div.content-wrap div.content-area {
 
       function render() {
           document.getElementById('hw-mining-log-test')?.remove();
+
+          if (!HW7_isCoreUiEnabled('miningLog')) return;
 
           const settings = loadSettings();
           const log = loadLog();
